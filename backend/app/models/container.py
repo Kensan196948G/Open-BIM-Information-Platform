@@ -120,9 +120,9 @@ class ContainerRevision(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         nullable=False,
         index=True,
     )
-    file_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("container_files.id"), nullable=True
-    )
+    # No FK constraint to avoid circular dependency with container_files;
+    # use container_files.revision_id for the reverse lookup instead.
+    file_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     revision_code: Mapped[str] = mapped_column(String(20), nullable=False)
     version_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

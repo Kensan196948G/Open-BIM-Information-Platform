@@ -12,8 +12,8 @@
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
-    "ci_success_rate": 0.0,
-    "test_pass_rate": 0.0,
+    "ci_success_rate": 0,
+    "test_pass_rate": 0,
     "security_critical": 0,
     "blocker_count": 0
   },
@@ -22,7 +22,8 @@
     "session_start": "2026-05-31T20:35:00+09:00",
     "repair_count": 0,
     "max_repair": 3,
-    "same_error_limit": 2
+    "same_error_limit": 2,
+    "last_stop_at": "2026-05-31T11:52:13.223Z"
   },
   "automation": {
     "auto_issue_generation": true,
@@ -43,5 +44,12 @@
   "learning": {
     "failure_patterns": [],
     "success_patterns": []
+  },
+  "dreaming": {
+    "patterns": [],
+    "curated_memories": [],
+    "recurring_mistakes": [],
+    "last_dreaming_run": null,
+    "dreaming_enabled": false
   }
 }
