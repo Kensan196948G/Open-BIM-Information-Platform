@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
@@ -22,5 +23,8 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
+    // Only run vitest unit tests under src/; Playwright owns e2e/
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    exclude: ["e2e/**", "node_modules/**"],
   },
 });
