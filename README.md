@@ -3,7 +3,7 @@
 > **ISO 19650 準拠 BIM 情報管理プラットフォーム**
 > Common Data Environment (CDE) 状態管理・監査証跡・要求文書管理を統合した Web システム
 
-[![CI](https://github.com/kensan1969/Open-BIM-Information-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/kensan1969/Open-BIM-Information-Platform/actions/workflows/ci.yml)
+[![CI](https://github.com/Kensan196948G/Open-BIM-Information-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Kensan196948G/Open-BIM-Information-Platform/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![React](https://img.shields.io/badge/React-18-61DAFB)
 ![ISO 19650](https://img.shields.io/badge/ISO-19650-green)
