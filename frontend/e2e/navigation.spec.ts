@@ -40,7 +40,7 @@ async function authenticate(page: any, baseURL: string) {
           },
         },
         version: 0,
-      })
+      }),
     );
   }, access_token);
 
@@ -50,21 +50,25 @@ async function authenticate(page: any, baseURL: string) {
 test.describe("Authenticated navigation", () => {
   test.skip(
     !process.env.VITE_API_BASE_URL,
-    "Requires running backend (set VITE_API_BASE_URL)"
+    "Requires running backend (set VITE_API_BASE_URL)",
   );
 
   test("dashboard shows stat cards", async ({ page }) => {
     await authenticate(page, process.env.BASE_URL || "http://localhost:5173");
-    await expect(page.getByText("ダッシュボード")).toBeVisible();
+    // "ダッシュボード" appears in sidebar (link) and page heading — target the heading
+    await expect(
+      page.getByRole("heading", { name: "ダッシュボード" }),
+    ).toBeVisible();
     await expect(page.getByText("プロジェクト数")).toBeVisible();
     await expect(page.getByText("情報コンテナ")).toBeVisible();
   });
 
   test("sidebar navigation works", async ({ page }) => {
     await authenticate(page, process.env.BASE_URL || "http://localhost:5173");
-    await page.getByText("プロジェクト").click();
+    // Use the sidebar link role to avoid matching the page heading
+    await page.getByRole("link", { name: "プロジェクト" }).click();
     await expect(page).toHaveURL(/\/projects/);
-    await expect(page.getByText("新規作成")).toBeVisible();
+    await expect(page.getByRole("button", { name: "新規作成" })).toBeVisible();
   });
 
   test("logout clears session and redirects", async ({ page }) => {
@@ -77,8 +81,9 @@ test.describe("Authenticated navigation", () => {
 test.describe("Static routing", () => {
   test("/ redirects to /dashboard or /login", async ({ page }) => {
     await page.goto("/");
-    const url = page.url();
-    expect(url).toMatch(/\/(dashboard|login)/);
+    // Wait for client-side redirect to settle (unauthenticated → /login)
+    await page.waitForURL(/\/(dashboard|login)/, { timeout: 5000 });
+    expect(page.url()).toMatch(/\/(dashboard|login)/);
   });
 
   test("login page is accessible without auth", async ({ page }) => {
