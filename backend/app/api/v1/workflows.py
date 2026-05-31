@@ -216,7 +216,25 @@ async def act_on_approval(
     current_user: CurrentUser,
     db: DB,
 ) -> ApprovalResponse:
-    # Use SELECT FOR UPDATE to prevent concurrent double-act race condition
+    # Lock ordering: parent WorkflowInstance FIRST, then Approval, then Container.
+    # Locking the parent serializes ALL approvers of the same workflow, so the
+    # aggregate decision (all_approved / any_rejected) is computed on a stable,
+    # serialized view — not a non-repeatable READ COMMITTED snapshot of siblings.
+    wf_result = await db.execute(
+        select(WorkflowInstance)
+        .where(WorkflowInstance.id == workflow_id)
+        .with_for_update()
+    )
+    workflow = wf_result.scalar_one_or_none()
+    if not workflow:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found"
+        )
+
+    # Re-verify caller is still a member of the workflow's project
+    await _require_project_member(workflow.project_id, current_user, db)
+
+    # Lock the specific approval row (blocks concurrent double-act on same approval)
     result = await db.execute(
         select(Approval)
         .where(Approval.id == approval_id, Approval.workflow_id == workflow_id)
@@ -227,13 +245,6 @@ async def act_on_approval(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found"
         )
-
-    # Re-verify caller is still a member of the workflow's project
-    wf_result = await db.execute(
-        select(WorkflowInstance).where(WorkflowInstance.id == workflow_id)
-    )
-    workflow = wf_result.scalar_one()
-    await _require_project_member(workflow.project_id, current_user, db)
 
     if approval.approver_id != current_user.id and not current_user.is_platform_admin:
         raise HTTPException(
@@ -249,6 +260,7 @@ async def act_on_approval(
     approval.acted_at = datetime.now(UTC).isoformat()
     approval.comment = body.comment
 
+    # Aggregation runs under the workflow lock → consistent view of all siblings
     all_approvals = await db.execute(
         select(Approval).where(Approval.workflow_id == workflow_id)
     )
@@ -259,15 +271,19 @@ async def act_on_approval(
 
     if any_rejected:
         workflow.status = WorkflowStatus.rejected
-        # Revert container to WIP — verify container belongs to workflow's project
+        # Revert container to WIP — lock the container row to serialize with the
+        # independent /transition endpoint (prevents Published→WIP corruption).
         if workflow.target_type == WorkflowTargetType.container.value:
             cont_result = await db.execute(
-                select(InformationContainer).where(
+                select(InformationContainer)
+                .where(
                     InformationContainer.id == workflow.target_id,
                     InformationContainer.project_id == workflow.project_id,
                 )
+                .with_for_update()
             )
             container = cont_result.scalar_one_or_none()
+            # Re-read state AFTER acquiring the lock; only revert if still Shared
             if container and container.current_state == ContainerState.shared:
                 history = ContainerStateHistory(
                     id=str(uuid.uuid4()),

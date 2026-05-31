@@ -38,7 +38,9 @@ class ContainerResponse(BaseModel):
 class StateTransitionRequest(BaseModel):
     action: str
     comment: str | None = None
-    target_state: ContainerState
+    # Optional client-side expectation; if provided, server verifies it matches
+    # the computed next state (defense against client/server divergence).
+    target_state: ContainerState | None = None
 
 
 class ContainerListResponse(BaseModel):

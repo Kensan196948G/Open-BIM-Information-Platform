@@ -136,12 +136,16 @@ async def transition_state(
     current_user: CurrentUser,
     db: DB,
 ) -> ContainerResponse:
+    await _get_project_or_404(project_id, current_user, db)
+    # Lock the container row to serialize with the workflow reject/revert path
     result = await db.execute(
-        select(InformationContainer).where(
+        select(InformationContainer)
+        .where(
             InformationContainer.id == container_id,
             InformationContainer.project_id == project_id,
             InformationContainer.is_deleted.is_(False),
         )
+        .with_for_update()
     )
     container = result.scalar_one_or_none()
     if not container:
@@ -149,12 +153,20 @@ async def transition_state(
             status_code=status.HTTP_404_NOT_FOUND, detail="Container not found"
         )
 
+    # Compute next state from the freshly-locked current state
     key = (container.current_state, body.action)
     next_state = VALID_TRANSITIONS.get(key)
     if not next_state:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Invalid transition: {container.current_state} + action '{body.action}'",
+        )
+
+    # If the client declared an expected target, verify it matches the server's computation
+    if body.target_state is not None and body.target_state != next_state:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"target_state mismatch: action '{body.action}' yields {next_state.value}, not {body.target_state.value}",
         )
 
     history = ContainerStateHistory(
