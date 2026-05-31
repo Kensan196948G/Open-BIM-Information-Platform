@@ -30,7 +30,7 @@
     "repair_count": 0,
     "max_repair": 3,
     "same_error_limit": 2,
-    "last_stop_at": "2026-05-31T12:38:24.318Z"
+    "last_stop_at": "2026-05-31T13:27:24.828Z"
   },
   "automation": {
     "auto_issue_generation": true,
@@ -70,16 +70,29 @@
     "ci_consecutive_green": 3
   },
   "release_readiness": {
-    "status": "sprint1_mvp_complete",
-    "deploy_ready": false,
+    "status": "release_ready_pending_human_signoff",
+    "cto_decision": "Release Ready",
+    "cto_decision_at": "2026-05-31",
     "ci_all_green": true,
+    "ci_jobs": 7,
+    "ci_last_run": "26714149298",
+    "stable_achieved": true,
+    "stable_consecutive_green": 5,
     "docs_complete": true,
+    "e2e_live_backend": true,
+    "performance_baseline": true,
     "remaining_for_production": [
-      "STABLE N=5 consecutive for auth/concurrency changes (currently 2-3)",
-      "E2E with live backend integration in CI (currently static Playwright only)",
-      "Performance baseline measurement",
-      "Human sign-off (mandatory for production deploy)"
+      "Human sign-off (mandatory for production deploy — CTO cannot self-approve)"
     ]
+  },
+  "deploy": {
+    "ready": true,
+    "ready_at": "2026-05-31",
+    "version": "v0.1.0",
+    "checklist": "docs/RELEASE_CHECKLIST.md",
+    "runbook": "docs/OPERATIONS.md",
+    "executor": "human (manual deploy required; CTO does not auto-deploy)",
+    "signoff": "pending"
   },
   "learning": {
     "failure_patterns": [
@@ -154,6 +167,19 @@
         "backend/app/services/storage.py",
         "backend/tests/test_naming_validator.py",
         "backend/tests/test_workflows.py"
+      ],
+      "truncated": false
+    },
+    {
+      "at": "2026-05-31T13:27:25.014Z",
+      "kind": "tdd_required",
+      "message": "テスト未整備の変更が 5 件あります。/tdd または tdd-guide agent で対応してください。",
+      "files": [
+        "backend/app/api/v1/containers.py",
+        "backend/app/api/v1/workflows.py",
+        "backend/app/schemas/container.py",
+        "backend/tests/test_workflows.py",
+        "frontend/vite.config.ts"
       ],
       "truncated": false
     }

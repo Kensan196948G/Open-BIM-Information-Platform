@@ -210,8 +210,13 @@ Open-BIM-Information-Platform/
 | --------------------------------------------------------------- | ---------------------------------------------------- |
 | [🏛️ ARCHITECTURE.md](docs/ARCHITECTURE.md)                      | 設計思想・レイヤー構造・CDE状態機械・認可モデル      |
 | [🛠️ OPERATIONS.md](docs/OPERATIONS.md)                          | デプロイ・ロールバック・監視・バックアップ・障害対応 |
+| [🚀 RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)            | Gate-3 リリース判定・人間サインオフ欄                |
 | [📋 要件定義書](Open%20BIM%20情報基盤%20要件定義書.md)          | ISO 19650 業務要件・機能要件・非機能要件             |
 | [📐 詳細仕様書](open-bim-information-platform-detailed-spec.md) | 画面・API・データモデル・状態遷移仕様                |
+
+> 🏁 **リリース状態**: v0.1.0 は **Release Ready（人間サインオフ待ち）**。
+> CI 全7ジョブ green・STABLE 達成・Critical/High 脆弱性 0。
+> 本番デプロイは [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) のサインオフ後、手動実行。
 
 ---
 
