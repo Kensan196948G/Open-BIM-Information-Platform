@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.audit_log import AuditLog
 from app.schemas.audit_log import AuditLogListResponse, AuditLogResponse
 

@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import DB, CurrentUser
 from app.core.security import (
@@ -12,7 +11,6 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.db.base import get_db
 from app.models.user import User
 from app.schemas.auth import TokenResponse, UserCreate, UserResponse
 

@@ -43,8 +43,12 @@ dev = [
 [tool.ruff]
 target-version = "py311"
 line-length = 88
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
-ignore = ["E501"]
+# E501: line too long (handled by formatter)
+# UP042: StrEnum not compatible with SQLAlchemy Enum columns in all drivers
+ignore = ["E501", "UP042"]
 
 [tool.mypy]
 python_version = "3.11"

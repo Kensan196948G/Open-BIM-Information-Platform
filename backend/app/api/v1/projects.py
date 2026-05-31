@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from app.core.deps import CurrentUser, DB
-from app.models.project import Project, ProjectMember
+from app.core.deps import DB, CurrentUser
+from app.models.project import Project
 from app.models.user import UserOrganization
 from app.schemas.project import (
     ProjectCreate,

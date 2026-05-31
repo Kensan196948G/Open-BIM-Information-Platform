@@ -1,4 +1,3 @@
-import pytest
 
 from app.services.naming_validator import (
     NamingRule,

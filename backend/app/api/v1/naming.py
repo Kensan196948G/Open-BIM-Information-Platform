@@ -1,8 +1,8 @@
 from fastapi import APIRouter
+from pydantic import BaseModel
 
 from app.core.deps import CurrentUser
-from app.services.naming_validator import ValidationLevel, validate_identifier
-from pydantic import BaseModel
+from app.services.naming_validator import validate_identifier
 
 router = APIRouter(prefix="/naming", tags=["naming"])
 

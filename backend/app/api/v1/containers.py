@@ -1,10 +1,10 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.container import (
     ContainerState,
     ContainerStateHistory,
@@ -159,7 +159,7 @@ async def transition_state(
         to_state=next_state.value,
         action=body.action,
         acted_by=current_user.id,
-        acted_at=datetime.now(timezone.utc).isoformat(),
+        acted_at=datetime.now(UTC).isoformat(),
         comment=body.comment,
     )
     container.current_state = next_state

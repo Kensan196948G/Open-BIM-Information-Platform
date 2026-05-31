@@ -4,7 +4,15 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import audit_logs, auth, containers, naming, projects
+from app.api.v1 import (
+    audit_logs,
+    auth,
+    containers,
+    naming,
+    projects,
+    uploads,
+    workflows,
+)
 from app.core.config import settings
 from app.db.base import engine
 
@@ -43,6 +51,8 @@ app.include_router(projects.router, prefix=API_PREFIX)
 app.include_router(containers.router, prefix=API_PREFIX)
 app.include_router(audit_logs.router, prefix=API_PREFIX)
 app.include_router(naming.router, prefix=API_PREFIX)
+app.include_router(uploads.router, prefix=API_PREFIX)
+app.include_router(workflows.router, prefix=API_PREFIX)
 
 
 @app.get("/health")
