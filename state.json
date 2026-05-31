@@ -1,0 +1,47 @@
+{
+  "project": {
+    "name": "Open-BIM-Information-Platform",
+    "start_date": "2026-05-31",
+    "release_deadline": "2026-11-30",
+    "phase_mode": "development",
+    "week": 1
+  },
+  "goal": "ISO 19650準拠のBIM情報基盤WebシステムをRelease Ready状態へ到達させる。全テスト通過・CI成功・blocker=0",
+  "goal_type": "production-release",
+  "phase": "Build",
+  "trust_level": 1,
+  "kpi": {
+    "success_rate_target": 0.9,
+    "ci_success_rate": 0.0,
+    "test_pass_rate": 0.0,
+    "security_critical": 0,
+    "blocker_count": 0
+  },
+  "execution": {
+    "max_duration_minutes": 300,
+    "session_start": "2026-05-31T20:35:00+09:00",
+    "repair_count": 0,
+    "max_repair": 3,
+    "same_error_limit": 2
+  },
+  "automation": {
+    "auto_issue_generation": true,
+    "self_evolution": true
+  },
+  "tech_stack": {
+    "backend": "FastAPI (Python 3.11)",
+    "frontend": "React 18 + TypeScript + Vite",
+    "database": "PostgreSQL 15",
+    "orm": "SQLAlchemy 2.x + Alembic",
+    "auth": "JWT + OIDC",
+    "storage": "MinIO (S3-compatible)",
+    "cache": "Redis",
+    "infra": "Docker Compose"
+  },
+  "completed_issues": [],
+  "blocked_issues": [],
+  "learning": {
+    "failure_patterns": [],
+    "success_patterns": []
+  }
+}

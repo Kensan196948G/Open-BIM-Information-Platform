@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.env
+.venv
+venv/
+env/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+*.local
+.DS_Store
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets
+*.pem
+*.key
+*.crt
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# MinIO data
+infra/minio/data/
+
+# PostgreSQL data
+infra/postgres/data/
+
+# Reports
+reports/
+
+# Claude runtime bridge files (not project config)
+.claude/claude_pty_bridge.py
+.claude/claude_startup_bridge.sh
+
+# SQLite test DB
+backend/test.db

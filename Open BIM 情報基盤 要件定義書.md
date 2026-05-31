@@ -1,0 +1,193 @@
+# Open BIM 情報基盤 要件定義書
+
+## 1. 文書概要
+本書は、ISO 19650準拠の統合Webシステム「Open BIM 情報基盤」の要件定義を定めるものである。対象システムは、CDE状態管理、命名規則・属性検証、監査証跡・改訂履歴、EIR/BEP/情報プロトコル管理、セキュリティ統制・情報分類、役割・責任・承認権限管理を中核機能として提供する。 [ukbimframework](https://ukbimframework.org/wp-content/uploads/2020/05/ISO19650-2Edition4.pdf)
+
+本システムは、情報コンテナの状態管理と利用目的管理、監査証跡、情報要求管理をWebベースで統合し、ISO 19650の実務運用を支援することを目的とする。 [cdbb.cam.ac](https://www.cdbb.cam.ac.uk/files/national_annex_guidance.pdf)
+
+## 2. システム基本情報
+- 日本語名: Open BIM 情報基盤
+- 英語名: Open Bim Information Platform
+- リポジトリ名: `Open-Bim-Information-Platform`
+- 提供形態: Webベース統合システム
+- 想定利用者: 発注者側管理者、Lead Appointed Party、Appointed Party、プロジェクト管理者、設計・施工担当者、監査担当者、情報管理責任者、セキュリティ管理者。 [cdn.standards.iteh](https://cdn.standards.iteh.ai/samples/68723/01862359b3b245bb98bd5d3d7f5434b5/SIST-TP-CEN-TR-17654-2021.pdf)
+
+## 3. 背景と目的
+ISO 19650では、情報コンテナがCDE内でWIP、Shared、Published、Archivedの状態を持ち、状態、改訂、分類などのメタデータに基づく管理が求められる。 [damassets.autodesk](https://damassets.autodesk.net/content/dam/autodesk/www/pdfs/common-data-environment-iso-19650-ebook-en.pdf)
+
+また、情報要求は「何を、いつ、どのように、誰のために」生産するかを規定し、OIR、AIR、PIR、EIRおよびBEP等の文書相互参照が重要である。 [cdbb.cam.ac](https://www.cdbb.cam.ac.uk/files/eir_guidance.pdf)
+
+さらに、ISO 19650-5では、機微情報の保護だけでなく、適切で比例的なセキュリティ文化、監査、組織的統制を求めているため、システム要件と運用要件を分離して整理する必要がある。 [iso](https://www.iso.org/standard/74206.html)
+
+## 4. 適用範囲
+本システムの適用範囲は、建築・土木プロジェクトにおけるBIM情報管理業務とし、成果物、図面、文書、IFC等の情報コンテナを対象とする。 [ukbimframework](https://ukbimframework.org/wp-content/uploads/2020/05/ISO19650-2Edition4.pdf)
+
+対象範囲には、情報コンテナ登録、状態遷移、改訂管理、属性検証、承認、監査、要求文書管理、役割管理、セキュリティ分類管理を含む。 [iso](https://www.iso.org/standard/74206.html)
+
+対象外範囲には、CAD/BIMオーサリングそのもの、契約文書の法的有効性判断、組織教育そのもの、外部法令遵守審査そのものを含む。これらは運用または外部業務で補完する。 [cdn.standards.iteh](https://cdn.standards.iteh.ai/samples/68723/01862359b3b245bb98bd5d3d7f5434b5/SIST-TP-CEN-TR-17654-2021.pdf)
+
+## 5. 前提と基本方針
+本システムは、ISO 19650完全準拠を「システム実装」と「組織運用」の二層で実現する方針を採用する。システムは統制を支援するが、契約、教育、責任分担、例外承認は運用で担保する。 [iso](https://www.iso.org/standard/74206.html)
+
+命名規則、分類体系、必須属性、状態遷移条件、承認ルート、保管期間、外部共有方針は、プロジェクト単位で設定可能とする。 [cdbb.cam.ac](https://www.cdbb.cam.ac.uk/files/national_annex_guidance.pdf)
+
+## 6. 利用者と役割
+役割管理は単純RBACではなく、ISO 19650で用いられる契約上・業務上の責任に近いロールモデルで設計する。 [en.wikipedia](https://en.wikipedia.org/wiki/ISO_19650)
+
+主要ロールは以下とする。
+- プラットフォーム管理者
+- 組織管理者
+- プロジェクト管理者
+- 発注者側管理者
+- Lead Appointed Party
+- Appointed Party
+- レビュー担当者
+- 承認担当者
+- 監査担当者
+- セキュリティ管理者
+- 一般利用者
+
+## 7. 業務要件
+### 7.1 CDE状態管理
+情報コンテナはWIP、Shared、Published、Archivedの状態を持ち、状態に応じて閲覧権限、編集権限、利用目的、次状態への遷移可否が制御されるものとする。 [damassets.autodesk](https://damassets.autodesk.net/content/dam/autodesk/www/pdfs/common-data-environment-iso-19650-ebook-en.pdf)
+
+状態遷移時には、実施者、日時、理由、レビュー結果、承認結果を記録し、完全な監査証跡を残すものとする。 [ukbimframework](https://ukbimframework.org/wp-content/uploads/2020/05/ISO19650-2Edition4.pdf)
+
+### 7.2 命名規則・属性検証
+情報コンテナには一意な識別子を付与し、合意した命名規則に基づいて自動検証を行うものとする。 [cdbb.cam.ac](https://www.cdbb.cam.ac.uk/files/national_annex_guidance.pdf)
+
+メタデータとして少なくとも状態、改訂、分類を保持し、必要に応じてOriginator、Volume/System、Level/Location、Type、Role、Number等をプロジェクト設定で定義できるものとする。 [damassets.autodesk](https://damassets.autodesk.net/content/dam/autodesk/www/pdfs/common-data-environment-iso-19650-ebook-en.pdf)
+
+### 7.3 監査証跡・改訂履歴
+システムは情報コンテナの内容、状態、改訂活動の履歴を保持し、過去版参照、差戻し履歴、承認履歴、操作履歴を追跡できるものとする。 [ukbimframework](https://ukbimframework.org/wp-content/uploads/2020/05/ISO19650-2Edition4.pdf)
+
+改訂コードはP01、C01等の形式に対応し、WIP中の版管理には枝番形式を扱えるものとする。 [cdbb.cam.ac](https://www.cdbb.cam.ac.uk/files/national_annex_guidance.pdf)
+
+### 7.4 EIR/BEP/情報プロトコル管理
+システムはOIR、AIR、PIR、EIR、BEPおよび関連文書の登録、版管理、相互参照、承認、公開制御を提供するものとする。 [cdbb.cam.ac](https://www.cdbb.cam.ac.uk/files/eir_guidance.pdf)
+
+各成果物は、どの要求文書に紐づくかを追跡できるものとし、提出要件、納期、責任者、受領条件を管理できるものとする。 [cita](https://www.cita.ie/wp-content/uploads/2021/09/00GG-GDA-XX-CITA-PP-K-XX-20210921-CENTR17654.pdf)
+
+### 7.5 セキュリティ統制・情報分類
+システムは機微情報の分類、アクセス制御、ダウンロード制御、外部共有制御、監査ログ出力を提供するものとする。 [store.uni](https://store.uni.com/en/en-iso-19650-5-2020)
+
+ただし、セキュリティ文化、教育、組織監査、比例的保護方針の策定は運用で補完する前提とする。 [iso](https://www.iso.org/standard/74206.html)
+
+### 7.6 役割・責任・承認権限管理
+プロジェクトごとに役割、責任範囲、レビュー権限、承認権限、差戻し権限を定義できるものとする。 [en.wikipedia](https://en.wikipedia.org/wiki/ISO_19650)
+
+状態遷移の各承認点では、レビュー担当者および承認担当者を明示的に割り当てられるものとする。 [damassets.autodesk](https://damassets.autodesk.net/content/dam/autodesk/www/pdfs/common-data-environment-iso-19650-ebook-en.pdf)
+
+## 8. 機能要件
+### 8.1 共通機能
+- 認証、認可
+- 組織管理
+- プロジェクト管理
+- ユーザー管理
+- 通知管理
+- 検索
+- ダッシュボード
+- 監査ログ参照
+
+### 8.2 CDE機能
+- コンテナ登録
+- ファイルアップロード
+- メタデータ入力
+- 状態遷移
+- 改訂管理
+- アーカイブ管理
+- 公開管理
+- 版比較
+
+### 8.3 命名・属性機能
+- 命名規則テンプレート管理
+- セグメント定義
+- 必須属性定義
+- 一括バリデーション
+- エラー表示
+- 是正依頼発行
+
+### 8.4 承認ワークフロー機能
+- レビュー依頼
+- 承認依頼
+- 差戻し
+- 条件付き承認
+- 承認履歴記録
+- ステータス連動通知
+
+### 8.5 文書要求管理機能
+- OIR/AIR/PIR/EIR/BEP登録
+- 版管理
+- 文書相互参照
+- 納品要件管理
+- 要求充足状況管理
+- マイルストーン管理
+
+### 8.6 セキュリティ機能
+- 情報分類設定
+- アクセスポリシー設定
+- ダウンロード可否制御
+- 外部共有申請
+- 監査ログ出力
+- 機密情報マスキング
+
+### 8.7 監査・レポート機能
+- 操作履歴検索
+- 状態遷移監査
+- 不適合一覧
+- 承認遅延一覧
+- 提出状況一覧
+- 監査用エビデンス出力
+
+## 9. 非機能要件
+### 9.1 可用性
+業務時間帯に安定稼働し、障害時の復旧手順を整備すること。可用性目標値は別途SLAで定義する。
+
+### 9.2 性能
+主要画面は通常利用時に実用的な応答速度を確保すること。検索、一覧、遷移、承認処理は性能劣化を最小化する設計とする。
+
+### 9.3 セキュリティ
+通信は暗号化し、認証・認可・監査ログ・権限分離を実装すること。機微情報取扱いはISO 19650-5の考え方に基づき、比例的に実装すること。 [iso](https://www.iso.org/standard/74206.html)
+
+### 9.4 拡張性
+命名規則、分類、属性、承認フロー、文書種別、ロール体系を設定可能とし、将来のプロジェクト差異に対応できること。 [cdbb.cam.ac](https://www.cdbb.cam.ac.uk/files/national_annex_guidance.pdf)
+
+### 9.5 保守性
+業務ルールは設定ファイルまたは管理UIで変更可能とし、アプリ改修頻度を抑えること。
+
+### 9.6 監査性
+すべての重要操作に対して時刻、利用者、対象、前後値、理由、結果を記録し、監査レポートに出力できること。 [ukbimframework](https://ukbimframework.org/wp-content/uploads/2020/05/ISO19650-2Edition4.pdf)
+
+## 10. 外部連携要件
+- SSO連携
+- メール通知連携
+- ストレージ連携
+- BIM/IFCビューア連携
+- BCF連携
+- 将来的なopenCDE API連携を考慮する
+
+## 11. 運用要件
+以下はシステム外で定義・運用されるが、システム設定と整合すべき事項である。
+- 状態遷移ルール
+- 命名規則標準
+- 分類体系
+- 契約文書
+- 情報要求定義
+- 例外承認手順
+- 教育計画
+- 権限棚卸手順
+- 監査実施手順
+
+## 12. 制約事項
+- 法的契約判断は対象外
+- BIMモデリング編集は対象外
+- 運用教育そのものは対象外
+- 完全準拠はシステム単独ではなく運用統合で達成する。 [cdn.standards.iteh](https://cdn.standards.iteh.ai/samples/68723/01862359b3b245bb98bd5d3d7f5434b5/SIST-TP-CEN-TR-17654-2021.pdf)
+
+## 13. 受入観点
+- CDE状態遷移が要件通り制御されること。 [damassets.autodesk](https://damassets.autodesk.net/content/dam/autodesk/www/pdfs/common-data-environment-iso-19650-ebook-en.pdf)
+- 命名規則・属性検証が設定どおり動作すること。 [cdbb.cam.ac](https://www.cdbb.cam.ac.uk/files/national_annex_guidance.pdf)
+- 監査証跡が完全に保存・検索できること。 [ukbimframework](https://ukbimframework.org/wp-content/uploads/2020/05/ISO19650-2Edition4.pdf)
+- EIR/BEP等の要求文書と成果物が追跡可能であること。 [cdbb.cam.ac](https://www.cdbb.cam.ac.uk/files/eir_guidance.pdf)
+- セキュリティ分類に応じたアクセス制御が実施できること。 [iso](https://www.iso.org/standard/74206.html)
+- 役割ごとの責任・承認権限が正しく制御されること。 [en.wikipedia](https://en.wikipedia.org/wiki/ISO_19650)
