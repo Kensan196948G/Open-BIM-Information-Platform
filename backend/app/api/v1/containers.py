@@ -37,7 +37,9 @@ async def _get_project_or_404(project_id: str, current_user, db) -> Project:
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+        )
 
     if not current_user.is_platform_admin:
         membership = await db.execute(
@@ -47,7 +49,9 @@ async def _get_project_or_404(project_id: str, current_user, db) -> Project:
             )
         )
         if not membership.scalar_one_or_none():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+            )
 
     return project
 
@@ -108,6 +112,7 @@ async def create_container(
 async def get_container(
     project_id: str, container_id: str, current_user: CurrentUser, db: DB
 ) -> ContainerResponse:
+    await _get_project_or_404(project_id, current_user, db)
     result = await db.execute(
         select(InformationContainer).where(
             InformationContainer.id == container_id,

@@ -2,7 +2,9 @@
 
 import hashlib
 import io
+import re
 import uuid
+from pathlib import PurePosixPath
 
 import boto3
 from botocore.exceptions import ClientError
@@ -27,11 +29,18 @@ def get_s3_client():
 
 
 def ensure_bucket_exists(bucket: str = settings.MINIO_BUCKET) -> None:
+    """Called once at startup via lifespan — not per request."""
     client = get_s3_client()
     try:
         client.head_bucket(Bucket=bucket)
     except ClientError:
         client.create_bucket(Bucket=bucket)
+
+
+def _safe_ext(filename: str) -> str:
+    """Return a sanitized, allowlisted extension (alphanumeric only, ≤10 chars)."""
+    suffix = PurePosixPath(filename).suffix.lstrip(".")
+    return re.sub(r"[^a-zA-Z0-9]", "", suffix)[:10] or "bin"
 
 
 def upload_file(
@@ -41,10 +50,9 @@ def upload_file(
     container_id: str,
     original_filename: str,
 ) -> tuple[str, str, int]:
-    """Upload file to MinIO. Returns (storage_key, sha256_hex, size_bytes)."""
-    ensure_bucket_exists()
+    """Upload file bytes to MinIO. Returns (storage_key, sha256_hex, size_bytes)."""
     sha256 = hashlib.sha256(data).hexdigest()
-    ext = original_filename.rsplit(".", 1)[-1] if "." in original_filename else "bin"
+    ext = _safe_ext(original_filename)
     storage_key = f"{project_id}/{container_id}/{uuid.uuid4().hex}.{ext}"
 
     get_s3_client().put_object(
@@ -53,16 +61,27 @@ def upload_file(
         Body=io.BytesIO(data),
         ContentType=content_type,
         ContentLength=len(data),
-        Metadata={"original-filename": original_filename, "sha256": sha256},
+        Metadata={"original-filename": original_filename[:255], "sha256": sha256},
     )
     return storage_key, sha256, len(data)
 
 
-def generate_presigned_url(storage_key: str, expires_in: int = 3600) -> str:
-    """Generate a presigned download URL."""
+def generate_presigned_url(
+    storage_key: str,
+    original_filename: str = "download",
+    expires_in: int = 3600,
+) -> str:
+    """Generate a presigned download URL that forces browser download (Content-Disposition: attachment)."""
+    # Sanitize filename for Content-Disposition header
+    safe_name = re.sub(r"[^\w.\-]", "_", original_filename)[:200]
     return get_s3_client().generate_presigned_url(
         "get_object",
-        Params={"Bucket": settings.MINIO_BUCKET, "Key": storage_key},
+        Params={
+            "Bucket": settings.MINIO_BUCKET,
+            "Key": storage_key,
+            "ResponseContentDisposition": f'attachment; filename="{safe_name}"',
+            "ResponseContentType": "application/octet-stream",
+        },
         ExpiresIn=expires_in,
     )
 

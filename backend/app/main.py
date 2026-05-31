@@ -22,6 +22,14 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("startup", app=settings.APP_NAME, version=settings.APP_VERSION)
+    # Ensure MinIO bucket exists once at startup (not per-request)
+    try:
+        from app.services.storage import ensure_bucket_exists
+
+        ensure_bucket_exists()
+        logger.info("storage_bucket_ready", bucket=settings.MINIO_BUCKET)
+    except Exception as exc:
+        logger.warning("storage_bucket_unavailable", error=str(exc))
     yield
     await engine.dispose()
     logger.info("shutdown")

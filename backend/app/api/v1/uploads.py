@@ -1,9 +1,11 @@
+import re
 import uuid
+from pathlib import PurePosixPath
 
 from fastapi import APIRouter, HTTPException, UploadFile, status
 from sqlalchemy import select
 
-from app.core.deps import DB, CurrentUser
+from app.core.deps import CurrentUser, DB
 from app.models.container import ContainerFile, ContainerState, InformationContainer
 from app.models.project import Project
 from app.models.user import UserOrganization
@@ -15,12 +17,95 @@ router = APIRouter(
 )
 
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500 MB
+CHUNK_SIZE = 1024 * 1024  # 1 MB per chunk
+
+# Allowlisted MIME types — excludes renderable types to prevent Stored XSS
+ALLOWED_CONTENT_TYPES = {
+    "application/octet-stream",
+    "application/pdf",
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/json",
+    "application/xml",
+    "text/plain",
+    "text/csv",
+    "image/png",
+    "image/jpeg",
+    "image/tiff",
+    "image/bmp",
+    "model/ifc",
+    "application/x-step",
+    # IFC and BIM formats
+    "application/ifc",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
+
+# Extension allowlist (after sanitization)
+ALLOWED_EXTENSIONS = {
+    "pdf",
+    "ifc",
+    "ifczip",
+    "bcf",
+    "bcfzip",
+    "zip",
+    "xlsx",
+    "xls",
+    "docx",
+    "doc",
+    "pptx",
+    "ppt",
+    "png",
+    "jpg",
+    "jpeg",
+    "tif",
+    "tiff",
+    "bmp",
+    "csv",
+    "txt",
+    "json",
+    "xml",
+    "dwg",
+    "dxf",
+    "rvt",
+    "rfa",
+    "skp",
+    "obj",
+    "gltf",
+    "glb",
+}
+
+
+def _sanitize_extension(filename: str) -> str:
+    """Extract and sanitize file extension — alphanumeric only, allowlisted."""
+    suffix = PurePosixPath(filename).suffix.lstrip(".")
+    clean = re.sub(r"[^a-zA-Z0-9]", "", suffix)[:10].lower()
+    return clean if clean in ALLOWED_EXTENSIONS else "bin"
+
+
+async def _read_streaming(file: UploadFile) -> bytes:
+    """Stream file in chunks, raising 413 before loading >MAX_FILE_SIZE into memory."""
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 async def _get_container_or_403(
     project_id: str, container_id: str, current_user, db
 ) -> InformationContainer:
-    """Verify project membership then return container."""
     proj_result = await db.execute(select(Project).where(Project.id == project_id))
     project = proj_result.scalar_one_or_none()
     if not project:
@@ -73,20 +158,29 @@ async def upload_file(
             detail="Files can only be uploaded to WIP containers",
         )
 
-    data = await file.read()
-    if len(data) > MAX_FILE_SIZE:
+    # Validate MIME type against allowlist (defense against Stored XSS)
+    declared_ct = (
+        (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
+    )
+    if declared_ct not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Content-Type '{declared_ct}' is not permitted. Upload BIM/document files only.",
         )
+
+    # Stream-read with early abort on size limit
+    data = await _read_streaming(file)
+
+    ext = _sanitize_extension(file.filename or "unnamed")
 
     try:
         storage_key, sha256, size = storage_svc.upload_file(
             data=data,
-            content_type=file.content_type or "application/octet-stream",
+            # Always store as octet-stream — presigned URL forces download attachment
+            content_type="application/octet-stream",
             project_id=project_id,
             container_id=container_id,
-            original_filename=file.filename or "unnamed",
+            original_filename=f"{uuid.uuid4().hex}.{ext}",
         )
     except Exception as exc:
         raise HTTPException(
@@ -99,7 +193,7 @@ async def upload_file(
         container_id=container_id,
         original_filename=file.filename or "unnamed",
         storage_key=storage_key,
-        content_type=file.content_type or "application/octet-stream",
+        content_type="application/octet-stream",
         file_size_bytes=size,
         checksum_sha256=sha256,
         uploaded_by=current_user.id,
@@ -143,7 +237,11 @@ async def get_download_url(
         )
 
     try:
-        url = storage_svc.generate_presigned_url(file_record.storage_key)
+        # Force download (Content-Disposition: attachment) to prevent Stored XSS
+        url = storage_svc.generate_presigned_url(
+            file_record.storage_key,
+            original_filename=file_record.original_filename,
+        )
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

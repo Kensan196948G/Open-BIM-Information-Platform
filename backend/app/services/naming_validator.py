@@ -133,7 +133,9 @@ def _default_iso19650_rule(project_id: str) -> NamingRule:
     )
 
 
-def validate_identifier(identifier: str, rule: NamingRule | None = None) -> ValidationResult:
+def validate_identifier(
+    identifier: str, rule: NamingRule | None = None
+) -> ValidationResult:
     """Validate a container identifier against naming rule segments."""
     if rule is None:
         rule = _default_iso19650_rule("default")
@@ -160,10 +162,12 @@ def validate_identifier(identifier: str, rule: NamingRule | None = None) -> Vali
             ],
         )
 
-    # Map parts to segments (skip optional if count is short)
+    # Map parts to segments with look-ahead to skip optional segments when
+    # doing so is necessary to satisfy remaining required segments.
+    # Example: 5 parts against [req, req, opt, opt, req, req, req] → skip both opts.
     segment_values: dict[str, str] = {}
     part_idx = 0
-    for seg in rule.segments:
+    for seg_idx, seg in enumerate(rule.segments):
         if part_idx >= len(parts):
             if seg.required:
                 issues.append(
@@ -176,6 +180,15 @@ def validate_identifier(identifier: str, rule: NamingRule | None = None) -> Vali
                     )
                 )
             continue
+
+        # Look ahead: count remaining required segments after this one
+        remaining_required = sum(1 for s in rule.segments[seg_idx + 1 :] if s.required)
+        remaining_parts = len(parts) - part_idx
+
+        # Skip optional segment if we'd run out of parts for later required ones
+        if not seg.required and remaining_parts <= remaining_required:
+            continue
+
         value = parts[part_idx]
         segment_values[seg.key] = value
         part_idx += 1

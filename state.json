@@ -43,7 +43,32 @@
   "blocked_issues": [],
   "learning": {
     "failure_patterns": [],
-    "success_patterns": []
+    "success_patterns": [],
+    "usage_history": {
+      "skills": {
+        "coderabbit:code-review": {
+          "call_count": 1,
+          "last_used": "2026-05-31T12:09:29.173Z",
+          "last_args_preview": "Review the committed changes in the Open BIM Information Platform backend. Focus"
+        },
+        "_total_skill_calls": 2,
+        "_last_skill_call_at": "2026-05-31T12:10:27.689Z",
+        "code-review": {
+          "call_count": 1,
+          "last_used": "2026-05-31T12:10:27.689Z",
+          "last_args_preview": "--effort high"
+        }
+      },
+      "agents": {
+        "feature-dev_code-reviewer": {
+          "call_count": 1,
+          "last_used": "2026-05-31T12:12:08.232Z",
+          "last_description": "コードレビュー（セキュリティ・バグ・保守性）"
+        },
+        "_total_agent_calls": 1,
+        "_last_agent_call_at": "2026-05-31T12:12:08.232Z"
+      }
+    }
   },
   "dreaming": {
     "patterns": [],
