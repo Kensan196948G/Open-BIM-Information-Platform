@@ -72,3 +72,8 @@ backend/test.db
 backend/test.db-journal
 backend/test.db-wal
 backend/test.db-shm
+
+# Playwright
+frontend/playwright-report/
+frontend/test-results/
+frontend/.playwright/

@@ -36,6 +36,7 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.45.0",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.5.0",
     "@types/react": "^18.3.0",
@@ -43,19 +44,18 @@
     "@typescript-eslint/eslint-plugin": "^7.13.0",
     "@typescript-eslint/parser": "^7.13.0",
     "@vitejs/plugin-react": "^4.3.0",
-    "@vitest/coverage-v8": "^4.1.7",
+    "@vitest/coverage-v8": "^2.1.9",
     "autoprefixer": "^10.4.19",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.7",
     "jsdom": "^24.1.0",
+    "playwright": "^1.45.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.4.0",
-    "vite": "^8.0.14",
-    "vite-node": "^6.0.0",
-    "vitest": "^4.1.7",
-    "@playwright/test": "^1.45.0",
-    "playwright": "^1.45.0"
+    "vite": "^7.3.3",
+    "vite-node": "^2.1.9",
+    "vitest": "^2.1.9"
   }
 }
