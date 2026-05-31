@@ -8,12 +8,15 @@
   },
   "goal": "ISO 19650準拠のBIM情報基盤WebシステムをRelease Ready状態へ到達させる。全テスト通過・CI成功・blocker=0",
   "goal_type": "production-release",
-  "phase": "Build",
+  "phase": "Verify",
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
-    "ci_success_rate": 0,
-    "test_pass_rate": 0,
+    "ci_success_rate": 0.0,
+    "test_pass_rate": 1.0,
+    "test_count": 19,
+    "lint_errors": 0,
+    "npm_vulnerabilities": 0,
     "security_critical": 0,
     "blocker_count": 0
   },
@@ -39,11 +42,34 @@
     "cache": "Redis",
     "infra": "Docker Compose"
   },
-  "completed_issues": [],
+  "completed_issues": [
+    "#1-partial: File upload API (MinIO ready, integration test pending)",
+    "#2-partial: Approval workflow API (endpoints done, E2E pending)"
+  ],
   "blocked_issues": [],
+  "security_review": {
+    "coderabbit": "credits_exhausted",
+    "internal_review": "completed",
+    "findings_fixed": 9
+  },
+  "quality": {
+    "test_pass": true,
+    "test_count": 19,
+    "lint_errors": 0,
+    "npm_vulnerabilities": 0,
+    "frontend_build": true
+  },
   "learning": {
-    "failure_patterns": [],
-    "success_patterns": [],
+    "failure_patterns": [
+      "bcrypt 5.x + Python 3.12: use bcrypt directly, not passlib",
+      "container_files + container_revisions: circular FK requires no-FK on one side",
+      "HTTPBearer returns 401 not 403 for missing Authorization header"
+    ],
+    "success_patterns": [
+      "SELECT FOR UPDATE for concurrent approval race condition prevention",
+      "Chunk-based streaming upload to enforce size limit before full load",
+      "Look-ahead algorithm for optional segment skipping in naming validator"
+    ],
     "usage_history": {
       "skills": {
         "coderabbit:code-review": {
