@@ -1,4 +1,3 @@
-
 from app.services.naming_validator import (
     NamingRule,
     SegmentDefinition,

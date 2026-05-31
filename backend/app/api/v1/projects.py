@@ -19,7 +19,9 @@ async def _require_project_membership(project_id: str, current_user, db) -> Proj
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+        )
 
     if not current_user.is_platform_admin:
         membership = await db.execute(
@@ -29,7 +31,9 @@ async def _require_project_membership(project_id: str, current_user, db) -> Proj
             )
         )
         if not membership.scalar_one_or_none():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+            )
 
     return project
 
@@ -49,11 +53,16 @@ async def list_projects(
         # Only projects within the user's organizations
         q = (
             select(Project)
-            .join(UserOrganization, UserOrganization.organization_id == Project.organization_id)
+            .join(
+                UserOrganization,
+                UserOrganization.organization_id == Project.organization_id,
+            )
             .where(UserOrganization.user_id == current_user.id)
         )
 
-    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
+    total = (
+        await db.execute(select(func.count()).select_from(q.subquery()))
+    ).scalar_one()
     result = await db.execute(q.offset(offset).limit(size))
     items = result.scalars().all()
     return ProjectListResponse(
@@ -95,7 +104,9 @@ async def create_project(
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-async def get_project(project_id: str, current_user: CurrentUser, db: DB) -> ProjectResponse:
+async def get_project(
+    project_id: str, current_user: CurrentUser, db: DB
+) -> ProjectResponse:
     project = await _require_project_membership(project_id, current_user, db)
     return ProjectResponse.model_validate(project)
 

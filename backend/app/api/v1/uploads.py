@@ -5,7 +5,7 @@ from pathlib import PurePosixPath
 from fastapi import APIRouter, HTTPException, UploadFile, status
 from sqlalchemy import select
 
-from app.core.deps import CurrentUser, DB
+from app.core.deps import DB, CurrentUser
 from app.models.container import ContainerFile, ContainerState, InformationContainer
 from app.models.project import Project
 from app.models.user import UserOrganization

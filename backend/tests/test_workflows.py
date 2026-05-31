@@ -4,12 +4,10 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 
 from app.models.organization import Organization
 from app.models.project import Project
-from app.models.user import User, UserOrganization
-
+from app.models.user import UserOrganization
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 

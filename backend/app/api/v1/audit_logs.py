@@ -31,7 +31,9 @@ async def list_audit_logs(
         q = q.where(AuditLog.target_type == target_type)
     if target_id:
         q = q.where(AuditLog.target_id == target_id)
-    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
+    total = (
+        await db.execute(select(func.count()).select_from(q.subquery()))
+    ).scalar_one()
     result = await db.execute(q.offset((page - 1) * size).limit(size))
     items = result.scalars().all()
     return AuditLogListResponse(

@@ -12,8 +12,8 @@
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
-    "ci_success_rate": 0.0,
-    "test_pass_rate": 1.0,
+    "ci_success_rate": 0,
+    "test_pass_rate": 1,
     "test_count": 19,
     "lint_errors": 0,
     "npm_vulnerabilities": 0,
@@ -26,7 +26,7 @@
     "repair_count": 0,
     "max_repair": 3,
     "same_error_limit": 2,
-    "last_stop_at": "2026-05-31T11:52:13.223Z"
+    "last_stop_at": "2026-05-31T12:38:24.318Z"
   },
   "automation": {
     "auto_issue_generation": true,
@@ -102,5 +102,33 @@
     "recurring_mistakes": [],
     "last_dreaming_run": null,
     "dreaming_enabled": false
-  }
+  },
+  "warnings": [
+    {
+      "at": "2026-05-31T12:38:24.906Z",
+      "kind": "tdd_required",
+      "message": "テスト未整備の変更が 18 件あります。/tdd または tdd-guide agent で対応してください。",
+      "files": [
+        "backend/alembic/versions/46aeadb1d6d7_initial_schema.py",
+        "backend/app/api/v1/audit_logs.py",
+        "backend/app/api/v1/auth.py",
+        "backend/app/api/v1/containers.py",
+        "backend/app/api/v1/naming.py",
+        "backend/app/api/v1/projects.py",
+        "backend/app/api/v1/uploads.py",
+        "backend/app/api/v1/workflows.py",
+        "backend/app/core/security.py",
+        "backend/app/models/base.py",
+        "backend/app/models/container.py",
+        "backend/app/models/user.py",
+        "backend/app/schemas/upload.py",
+        "backend/app/services/__init__.py",
+        "backend/app/services/naming_validator.py",
+        "backend/app/services/storage.py",
+        "backend/tests/test_naming_validator.py",
+        "backend/tests/test_workflows.py"
+      ],
+      "truncated": false
+    }
+  ]
 }
