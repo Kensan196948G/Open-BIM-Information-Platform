@@ -10,3 +10,10 @@ BEGIN
   RAISE EXCEPTION 'audit_logs are immutable — DELETE and UPDATE are forbidden';
 END;
 $$ LANGUAGE plpgsql;
+
+-- Note: the trigger binding is applied in the Alembic migration that creates
+-- the audit_logs table, so the function is available before tables exist here.
+-- The migration will run:
+--   CREATE TRIGGER audit_logs_no_modify
+--   BEFORE UPDATE OR DELETE ON audit_logs
+--   FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification();

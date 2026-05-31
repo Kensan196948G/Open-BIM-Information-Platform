@@ -11,6 +11,7 @@ from app.models.container import (
     InformationContainer,
 )
 from app.models.project import Project
+from app.models.user import UserOrganization
 from app.schemas.container import (
     ContainerCreate,
     ContainerListResponse,
@@ -31,13 +32,23 @@ VALID_TRANSITIONS: dict[tuple[ContainerState, str], ContainerState] = {
 }
 
 
-async def _get_project_or_404(project_id: str, db: DB) -> Project:
+async def _get_project_or_404(project_id: str, current_user, db) -> Project:
+    """Return project only if current_user is a member of its organization."""
     result = await db.execute(select(Project).where(Project.id == project_id))
     project = result.scalar_one_or_none()
     if not project:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Project not found"
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    if not current_user.is_platform_admin:
+        membership = await db.execute(
+            select(UserOrganization).where(
+                UserOrganization.user_id == current_user.id,
+                UserOrganization.organization_id == project.organization_id,
+            )
         )
+        if not membership.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
     return project
 
 
@@ -50,7 +61,7 @@ async def list_containers(
     size: int = Query(20, ge=1, le=100),
     state: ContainerState | None = None,
 ) -> ContainerListResponse:
-    await _get_project_or_404(project_id, db)
+    await _get_project_or_404(project_id, current_user, db)
     q = select(InformationContainer).where(
         InformationContainer.project_id == project_id,
         InformationContainer.is_deleted.is_(False),
@@ -77,7 +88,7 @@ async def create_container(
     current_user: CurrentUser,
     db: DB,
 ) -> ContainerResponse:
-    await _get_project_or_404(project_id, db)
+    await _get_project_or_404(project_id, current_user, db)
     org_result = await db.execute(select(Project).where(Project.id == project_id))
     project = org_result.scalar_one()
 
