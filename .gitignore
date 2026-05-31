@@ -67,5 +67,8 @@ reports/
 .claude/claude_pty_bridge.py
 .claude/claude_startup_bridge.sh
 
-# SQLite test DB
+# SQLite test DB artifacts
 backend/test.db
+backend/test.db-journal
+backend/test.db-wal
+backend/test.db-shm
