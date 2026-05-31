@@ -12,11 +12,15 @@
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
-    "ci_success_rate": 0,
+    "ci_success_rate": 1.0,
+    "ci_all_jobs_pass": true,
+    "ci_last_run": "26713249302",
     "test_pass_rate": 1,
-    "test_count": 19,
+    "test_count": 27,
+    "backend_test_count": 19,
+    "frontend_test_count": 8,
     "lint_errors": 0,
-    "npm_vulnerabilities": 0,
+    "npm_vulnerabilities_high": 0,
     "security_critical": 0,
     "blocker_count": 0
   },

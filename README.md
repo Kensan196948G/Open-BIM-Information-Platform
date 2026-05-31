@@ -180,16 +180,39 @@ Open-BIM-Information-Platform/
 
 ## 🚀 ロードマップ
 
+### ✅ 実装済み (Sprint 1)
+
 - [x] 基盤整備 (Docker Compose + FastAPI + React)
-- [x] DB モデル設計 (ISO 19650 対応)
-- [x] 認証 (JWT)
-- [x] CDE 状態遷移 API
-- [x] CI/CD (GitHub Actions)
-- [ ] ファイルアップロード (MinIO)
-- [ ] 命名規則検証エンジン
-- [ ] 承認ワークフロー
+- [x] DB モデル設計 (ISO 19650 対応・19テーブル・Alembic マイグレーション)
+- [x] 認証 (JWT + bcrypt)
+- [x] CDE 状態遷移 API (WIP→Shared→Published→Archived)
+- [x] 命名規則検証エンジン (ISO 19650-2 Annex A 準拠)
+- [x] ファイルアップロード API (MinIO + SHA-256 + MIME allowlist)
+- [x] 承認ワークフロー API (SELECT FOR UPDATE 排他制御)
+- [x] 監査ログ API (改ざん防止トリガー)
+- [x] CI/CD (GitHub Actions・全6ジョブ green)
+- [x] E2E テスト基盤 (Playwright)
+- [x] セキュリティ強化 (IDOR・DoS・XSS・PathTraversal・RaceCondition 対策)
+
+### 🔜 次期スプリント
+
 - [ ] OIDC/SAML 連携
-- [ ] E2E テスト (Playwright)
+- [ ] 命名規則プロジェクト別カスタム設定 API
+- [ ] 通知システム (アプリ内 + メール)
+- [ ] レポート出力 (CSV/PDF)
+- [ ] MinIO 実サービス統合テスト
+
+---
+
+## 🧱 品質メトリクス (Sprint 1 完了時点)
+
+| 指標                  | 値                              |
+| --------------------- | ------------------------------- |
+| ✅ CI ジョブ          | 6/6 green                       |
+| 🧪 テスト             | 27 件 (backend 19 + frontend 8) |
+| 🔍 Lint エラー        | 0                               |
+| 🔐 npm 脆弱性 (high+) | 0                               |
+| 🛡️ セキュリティ修正   | 13 件 (内部レビュー)            |
 
 ---
 
