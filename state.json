@@ -12,7 +12,7 @@
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
-    "ci_success_rate": 1.0,
+    "ci_success_rate": 1,
     "ci_all_jobs_pass": true,
     "ci_last_run": "26713249302",
     "test_pass_rate": 1,
@@ -53,15 +53,33 @@
   "blocked_issues": [],
   "security_review": {
     "coderabbit": "credits_exhausted",
+    "codex_adversarial": "timeout_fallback_to_subagent",
     "internal_review": "completed",
-    "findings_fixed": 9
+    "adversarial_review": "completed (subagent)",
+    "findings_fixed": 13,
+    "critical_high_open": 0
   },
   "quality": {
     "test_pass": true,
-    "test_count": 19,
+    "test_count": 32,
+    "backend_test_count": 24,
+    "frontend_test_count": 8,
     "lint_errors": 0,
-    "npm_vulnerabilities": 0,
-    "frontend_build": true
+    "npm_vulnerabilities_high": 0,
+    "frontend_build": true,
+    "ci_consecutive_green": 3
+  },
+  "release_readiness": {
+    "status": "sprint1_mvp_complete",
+    "deploy_ready": false,
+    "ci_all_green": true,
+    "docs_complete": true,
+    "remaining_for_production": [
+      "STABLE N=5 consecutive for auth/concurrency changes (currently 2-3)",
+      "E2E with live backend integration in CI (currently static Playwright only)",
+      "Performance baseline measurement",
+      "Human sign-off (mandatory for production deploy)"
+    ]
   },
   "learning": {
     "failure_patterns": [
@@ -95,8 +113,13 @@
           "last_used": "2026-05-31T12:12:08.232Z",
           "last_description": "コードレビュー（セキュリティ・バグ・保守性）"
         },
-        "_total_agent_calls": 1,
-        "_last_agent_call_at": "2026-05-31T12:12:08.232Z"
+        "_total_agent_calls": 2,
+        "_last_agent_call_at": "2026-05-31T13:12:17.568Z",
+        "general-purpose": {
+          "call_count": 1,
+          "last_used": "2026-05-31T13:12:17.568Z",
+          "last_description": "並列処理・認可の対抗レビュー"
+        }
       }
     }
   },
