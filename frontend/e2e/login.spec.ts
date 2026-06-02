@@ -6,7 +6,8 @@ test.describe("Login page", () => {
   });
 
   test("shows login form with correct elements", async ({ page }) => {
-    await expect(page.getByText("Open BIM 情報基盤")).toBeVisible();
+    // Use .first() — redesigned login has the brand name in both header and footer
+    await expect(page.getByText("Open BIM 情報基盤").first()).toBeVisible();
     await expect(page.getByPlaceholder("user@example.com")).toBeVisible();
     await expect(page.getByRole("button", { name: "ログイン" })).toBeVisible();
   });

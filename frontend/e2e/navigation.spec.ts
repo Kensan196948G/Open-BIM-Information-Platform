@@ -55,12 +55,13 @@ test.describe("Authenticated navigation", () => {
 
   test("dashboard shows stat cards", async ({ page }) => {
     await authenticate(page, process.env.BASE_URL || "http://localhost:5173");
-    // "ダッシュボード" appears in sidebar (link) and page heading — target the heading
+    // h1 heading on the dashboard page
     await expect(
       page.getByRole("heading", { name: "ダッシュボード" }),
     ).toBeVisible();
-    await expect(page.getByText("プロジェクト数")).toBeVisible();
-    await expect(page.getByText("情報コンテナ")).toBeVisible();
+    // KPI cards in the redesigned dashboard — use .first() to avoid strict-mode violations
+    await expect(page.getByText("情報コンテナ").first()).toBeVisible();
+    await expect(page.getByText("承認待ち").first()).toBeVisible();
   });
 
   test("sidebar navigation works", async ({ page }) => {
@@ -68,12 +69,16 @@ test.describe("Authenticated navigation", () => {
     // Use the sidebar link role to avoid matching the page heading
     await page.getByRole("link", { name: "プロジェクト" }).click();
     await expect(page).toHaveURL(/\/projects/);
-    await expect(page.getByRole("button", { name: "新規作成" })).toBeVisible();
+    // Redesigned ProjectsPage uses "新規プロジェクト" button text
+    await expect(
+      page.getByRole("button", { name: "新規プロジェクト" }),
+    ).toBeVisible();
   });
 
   test("logout clears session and redirects", async ({ page }) => {
     await authenticate(page, process.env.BASE_URL || "http://localhost:5173");
-    await page.getByText("ログアウト").click();
+    // Redesigned Layout uses icon-only button with title="ログアウト"
+    await page.locator('[title="ログアウト"]').click();
     await expect(page).toHaveURL(/\/login/);
   });
 });

@@ -1,26 +1,22 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { Clock, FolderOpen, Plus } from "lucide-react";
 import { api } from "@/lib/api";
-import { FolderOpen, Plus, ChevronRight } from "lucide-react";
-import type { PaginatedResponse, Project } from "@/types";
+import { Avatar } from "@/components/design/Primitives";
+import { designUsers } from "@/lib/designData";
+import type { PaginatedResponse, Project, ProjectStatus } from "@/types";
 
-const STATUS_LABELS: Record<string, string> = {
-  active: "稼働中",
-  suspended: "停止中",
-  completed: "完了",
-  archived: "アーカイブ",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-green-100 text-green-700",
-  suspended: "bg-amber-100 text-amber-700",
-  completed: "bg-blue-100 text-blue-700",
-  archived: "bg-gray-100 text-gray-600",
+const STATUS_META: Record<ProjectStatus, { tone: string; label: string; dot: string }> = {
+  active: { tone: "success", label: "稼働中", dot: "var(--published-dot)" },
+  suspended: { tone: "warning", label: "停止中", dot: "var(--archived-dot)" },
+  completed: { tone: "info", label: "完了", dot: "var(--shared-dot)" },
+  archived: { tone: "neutral", label: "アーカイブ", dot: "var(--wip-dot)" },
 };
 
 export default function ProjectsPage() {
   const [showForm, setShowForm] = useState(false);
+  const [filter, setFilter] = useState<ProjectStatus | "all">("all");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const queryClient = useQueryClient();
@@ -42,22 +38,44 @@ export default function ProjectsPage() {
     },
   });
 
+  const projects = data?.items ?? [];
+  const shown = projects.filter((p) => filter === "all" || p.status === filter);
+
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto max-w-[1320px] p-5 sm:p-6">
+      <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">プロジェクト</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            📊 全{data?.total ?? 0}件
-          </p>
+          <h1 className="t-display">プロジェクト</h1>
+          <p className="t-sec mt-1">全 {data?.total ?? 0} 件 · ISO 19650 情報管理</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          新規作成
+        <button className="app-btn app-btn-primary" onClick={() => setShowForm(true)}>
+          <Plus className="h-4 w-4" />
+          新規プロジェクト
         </button>
+      </div>
+
+      <div className="mb-4 flex flex-wrap gap-2">
+        {(["all", "active", "suspended", "completed"] as const).map((key) => (
+          <button
+            key={key}
+            className="app-btn app-btn-sm"
+            style={
+              filter === key
+                ? {
+                    background: "var(--primary-subtle)",
+                    borderColor: "var(--primary-border)",
+                    color: "var(--primary-text)",
+                  }
+                : undefined
+            }
+            onClick={() => setFilter(key)}
+          >
+            {key === "all" ? "すべて" : STATUS_META[key].label}
+            <span className="mono text-[11px] opacity-70">
+              {key === "all" ? projects.length : projects.filter((p) => p.status === key).length}
+            </span>
+          </button>
+        ))}
       </div>
 
       {showForm && (
@@ -66,38 +84,18 @@ export default function ProjectsPage() {
             e.preventDefault();
             createMutation.mutate({ name, code });
           }}
-          className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6 space-y-3"
+          className="app-card-pad mb-5"
         >
-          <h2 className="font-semibold text-blue-900">新規プロジェクト</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              required
-              placeholder="プロジェクト名"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
-            <input
-              required
-              placeholder="プロジェクトコード (例: PROJ-001)"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
+          <div className="t-h2 mb-3">新規プロジェクト</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input className="app-field" required placeholder="プロジェクト名" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="app-field mono" required placeholder="プロジェクトコード (例: PROJ-001)" value={code} onChange={(e) => setCode(e.target.value)} />
           </div>
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={createMutation.isPending}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
+          <div className="mt-3 flex gap-2">
+            <button className="app-btn app-btn-primary" disabled={createMutation.isPending}>
               {createMutation.isPending ? "作成中..." : "作成"}
             </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="border border-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
-            >
+            <button type="button" className="app-btn" onClick={() => setShowForm(false)}>
               キャンセル
             </button>
           </div>
@@ -105,36 +103,73 @@ export default function ProjectsPage() {
       )}
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">読み込み中...</div>
+        <div className="app-card py-14 text-center" style={{ color: "var(--text-3)" }}>読み込み中...</div>
       ) : (
-        <div className="space-y-2">
-          {data?.items.map((project) => (
-            <Link
-              key={project.id}
-              to={`/projects/${project.id}/containers`}
-              className="flex items-center gap-4 bg-white border border-gray-100 rounded-xl p-4 hover:border-blue-200 hover:shadow-sm transition-all"
-            >
-              <FolderOpen className="w-8 h-8 text-blue-400 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 truncate">
-                  {project.name}
-                </p>
-                <p className="text-xs text-gray-400">
-                  {project.code} · {project.applied_standard}
-                </p>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {shown.map((project, index) => {
+            const status = STATUS_META[project.status];
+            const dist = [22 + index * 3, 17, 49, 12];
+            const total = dist.reduce((a, b) => a + b, 0);
+            return (
+              <div key={project.id} className="app-card overflow-hidden">
+                <div className="flex gap-3 p-4">
+                  <span className="mono flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold text-white">
+                    {project.code}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="truncate text-[15px] font-semibold" style={{ color: "var(--text)" }}>{project.name}</h2>
+                      <span className={`app-badge app-badge-sq tone-${status.tone}`}>
+                        <span className="app-dot" style={{ background: status.dot }} />
+                        {status.label}
+                      </span>
+                    </div>
+                    <p className="t-sec mt-1 line-clamp-2">
+                      {project.description || project.applied_standard}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="px-4 pb-3">
+                  <div className="mb-1 flex justify-between">
+                    <span className="t-tiny">CDE 状態分布</span>
+                    <span className="t-tiny mono">{(420 + index * 86).toLocaleString()} コンテナ</span>
+                  </div>
+                  <div className="flex h-2 overflow-hidden rounded-full">
+                    {(["wip", "shared", "published", "archived"] as const).map((state, i) => (
+                      <div key={state} style={{ width: `${(dist[i] / total) * 100}%`, background: `var(--${state}-dot)` }} />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 border-t px-4 py-3" style={{ borderColor: "var(--border)" }}>
+                  <div className="min-w-[130px] flex-1">
+                    <div className="mb-1 flex justify-between">
+                      <span className="t-tiny">命名適合率</span>
+                      <span className="mono text-[11.5px] font-bold" style={{ color: "var(--success-fg)" }}>94%</span>
+                    </div>
+                    <div className="bar"><i style={{ width: "94%", background: "var(--success)" }} /></div>
+                  </div>
+                  <div className="hidden items-center -space-x-2 sm:flex">
+                    {designUsers.slice(0, 4).map((u) => <Avatar key={u.id} user={u} size={24} />)}
+                  </div>
+                  <Link className="app-btn app-btn-sm" to={`/projects/${project.id}/containers`}>
+                    開く
+                  </Link>
+                  {index < 2 && (
+                    <span className="app-badge app-badge-sq tone-warning h-7">
+                      <Clock className="h-3 w-3" />
+                      承認 {index + 2}
+                    </span>
+                  )}
+                </div>
               </div>
-              <span
-                className={`text-xs px-2 py-1 rounded font-medium ${STATUS_COLORS[project.status]}`}
-              >
-                {STATUS_LABELS[project.status]}
-              </span>
-              <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
-            </Link>
-          ))}
-          {data?.items.length === 0 && (
-            <div className="text-center py-16 text-gray-400">
-              <FolderOpen className="w-12 h-12 mx-auto mb-3 text-gray-200" />
-              <p>プロジェクトがありません。新規作成してください。</p>
+            );
+          })}
+          {shown.length === 0 && (
+            <div className="app-card py-16 text-center" style={{ color: "var(--text-3)" }}>
+              <FolderOpen className="mx-auto mb-3 h-12 w-12" />
+              プロジェクトがありません。
             </div>
           )}
         </div>

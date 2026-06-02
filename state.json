@@ -8,18 +8,18 @@
   },
   "goal": "ISO 19650準拠のBIM情報基盤WebシステムをRelease Ready状態へ到達させる。全テスト通過・CI成功・blocker=0",
   "goal_type": "production-release",
-  "phase": "Release",
+  "phase": "Build",
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
     "ci_success_rate": 1.0,
     "ci_all_jobs_pass": true,
     "ci_jobs": 7,
-    "ci_last_run": "26714241438",
-    "ci_consecutive_success": 6,
+    "ci_last_run": "26853597002",
+    "ci_consecutive_success": 1,
     "test_pass_rate": 1.0,
-    "test_count": 45,
-    "backend_test_count": 28,
+    "test_count": 52,
+    "backend_test_count": 35,
     "frontend_test_count": 8,
     "e2e_test_count": 9,
     "lint_errors": 0,
@@ -193,10 +193,7 @@
       "at": "2026-05-31T13:45:15.850Z",
       "kind": "tdd_required",
       "message": "テスト未整備の変更が 2 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_performance.py",
-        "frontend/vite.config.ts"
-      ],
+      "files": ["backend/tests/test_performance.py", "frontend/vite.config.ts"],
       "truncated": false
     }
   ]
