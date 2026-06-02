@@ -59,9 +59,9 @@ test.describe("Authenticated navigation", () => {
     await expect(
       page.getByRole("heading", { name: "ダッシュボード" }),
     ).toBeVisible();
-    // KPI cards in the redesigned dashboard (プロジェクト数 was replaced)
+    // KPI cards in the redesigned dashboard — use .first() to avoid strict-mode violations
     await expect(page.getByText("情報コンテナ").first()).toBeVisible();
-    await expect(page.getByText("承認待ち")).toBeVisible();
+    await expect(page.getByText("承認待ち").first()).toBeVisible();
   });
 
   test("sidebar navigation works", async ({ page }) => {
