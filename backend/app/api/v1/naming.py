@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import CurrentUser, get_db
 from app.models.naming_rule import ProjectNamingRule
+from app.models.project import Project
+from app.models.user import UserOrganization
 from app.services.naming_validator import (
     NamingRule,
     SegmentDefinition,
@@ -37,10 +39,25 @@ class ValidateNameResponse(BaseModel):
 
 
 async def _resolve_rule_for_project(
-    project_id: str | None, db: AsyncSession
+    project_id: str | None, current_user, db: AsyncSession
 ) -> NamingRule | None:
+    """Return project-specific rule only if current_user has access; else default."""
     if not project_id:
         return None
+    proj_result = await db.execute(select(Project).where(Project.id == project_id))
+    project = proj_result.scalar_one_or_none()
+    if not project:
+        return _default_iso19650_rule(project_id)
+    if not current_user.is_platform_admin:
+        mem = await db.execute(
+            select(UserOrganization).where(
+                UserOrganization.user_id == current_user.id,
+                UserOrganization.organization_id == project.organization_id,
+            )
+        )
+        if not mem.scalar_one_or_none():
+            # Fall back to default rather than leaking rule or org membership
+            return _default_iso19650_rule(project_id)
     db_result = await db.execute(
         select(ProjectNamingRule).where(ProjectNamingRule.project_id == project_id)
     )
@@ -72,7 +89,7 @@ async def validate_name(
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
 ) -> ValidateNameResponse:
-    rule = await _resolve_rule_for_project(body.project_id, db)
+    rule = await _resolve_rule_for_project(body.project_id, current_user, db)
     result = validate_identifier(body.identifier, rule)
     return ValidateNameResponse(
         identifier=result.identifier,
