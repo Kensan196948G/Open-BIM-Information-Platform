@@ -10,6 +10,7 @@ from app.models.container import (
     ContainerStateHistory,
     InformationContainer,
 )
+from app.models.naming_rule import ProjectNamingRule
 from app.models.project import Project
 from app.models.user import UserOrganization
 from app.schemas.container import (
@@ -18,6 +19,12 @@ from app.schemas.container import (
     ContainerResponse,
     ContainerUpdate,
     StateTransitionRequest,
+)
+from app.services.naming_validator import (
+    NamingRule,
+    SegmentDefinition,
+    _default_iso19650_rule,
+    validate_identifier,
 )
 
 router = APIRouter(prefix="/projects/{project_id}/containers", tags=["containers"])
@@ -85,6 +92,33 @@ async def list_containers(
     )
 
 
+async def _resolve_naming_rule(project_id: str, db) -> NamingRule:
+    """Return project-specific naming rule or ISO 19650 default."""
+    result = await db.execute(
+        select(ProjectNamingRule).where(ProjectNamingRule.project_id == project_id)
+    )
+    db_rule = result.scalar_one_or_none()
+    if not db_rule:
+        return _default_iso19650_rule(project_id)
+    return NamingRule(
+        project_id=project_id,
+        separator=db_rule.separator,
+        segments=[
+            SegmentDefinition(
+                key=s["key"],
+                label=s.get("label", s["key"]),
+                required=s.get("required", True),
+                max_length=s.get("max_length"),
+                min_length=s.get("min_length"),
+                allowed_values=s.get("allowed_values", []),
+                pattern=s.get("pattern"),
+                description=s.get("description", ""),
+            )
+            for s in db_rule.segments
+        ],
+    )
+
+
 @router.post("", response_model=ContainerResponse, status_code=status.HTTP_201_CREATED)
 async def create_container(
     project_id: str,
@@ -96,10 +130,15 @@ async def create_container(
     org_result = await db.execute(select(Project).where(Project.id == project_id))
     project = org_result.scalar_one()
 
+    naming_rule = await _resolve_naming_rule(project_id, db)
+    validation = validate_identifier(body.identifier, naming_rule)
+
     container = InformationContainer(
         project_id=project_id,
         owner_org_id=project.organization_id,
         created_by=current_user.id,
+        naming_valid=validation.is_compliant,
+        naming_issues=validation.issues_text or None,
         **body.model_dump(),
     )
     db.add(container)

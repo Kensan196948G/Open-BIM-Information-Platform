@@ -12,12 +12,12 @@
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
-    "ci_success_rate": 1.0,
+    "ci_success_rate": 1,
     "ci_all_jobs_pass": true,
     "ci_jobs": 7,
     "ci_last_run": "26853597002",
     "ci_consecutive_success": 1,
-    "test_pass_rate": 1.0,
+    "test_pass_rate": 1,
     "test_count": 52,
     "backend_test_count": 35,
     "frontend_test_count": 8,
@@ -36,7 +36,10 @@
     "repair_count": 0,
     "max_repair": 3,
     "same_error_limit": 2,
-    "last_stop_at": "2026-05-31T13:45:15.458Z"
+    "last_stop_at": "2026-05-31T14:00:57.205Z",
+    "current_session_start_at": "2026-06-02T21:54:30.700Z",
+    "last_trigger": "manual",
+    "last_cron_session_id": "20260603-065425-Open-BIM-Information-Platform"
   },
   "automation": {
     "auto_issue_generation": true,
@@ -54,7 +57,8 @@
   },
   "completed_issues": [
     "#1-partial: File upload API (MinIO ready, integration test pending)",
-    "#2-partial: Approval workflow API (endpoints done, E2E pending)"
+    "#2-partial: Approval workflow API (endpoints done, E2E pending)",
+    "#3: Naming rules API (PR #6 — 35 tests passing, lint clean)"
   ],
   "blocked_issues": [],
   "security_review": {
@@ -104,12 +108,14 @@
     "failure_patterns": [
       "bcrypt 5.x + Python 3.12: use bcrypt directly, not passlib",
       "container_files + container_revisions: circular FK requires no-FK on one side",
-      "HTTPBearer returns 401 not 403 for missing Authorization header"
+      "FastAPI 0.115+ HTTPBearer returns 403 (not 401) for missing Authorization header — test assertions must use 403"
     ],
     "success_patterns": [
       "SELECT FOR UPDATE for concurrent approval race condition prevention",
       "Chunk-based streaming upload to enforce size limit before full load",
-      "Look-ahead algorithm for optional segment skipping in naming validator"
+      "Look-ahead algorithm for optional segment skipping in naming validator",
+      "NamingRule dataclass designed for DI — DB model stores JSON, service converts to dataclass",
+      "react-refresh/only-export-components: move non-component exports to lib/fmt.ts"
     ],
     "usage_history": {
       "skills": {

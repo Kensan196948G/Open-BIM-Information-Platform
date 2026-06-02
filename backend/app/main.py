@@ -9,6 +9,7 @@ from app.api.v1 import (
     auth,
     containers,
     naming,
+    naming_rules,
     projects,
     uploads,
     workflows,
@@ -57,6 +58,7 @@ API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(projects.router, prefix=API_PREFIX)
 app.include_router(containers.router, prefix=API_PREFIX)
+app.include_router(naming_rules.router, prefix=API_PREFIX)
 app.include_router(audit_logs.router, prefix=API_PREFIX)
 app.include_router(naming.router, prefix=API_PREFIX)
 app.include_router(uploads.router, prefix=API_PREFIX)
