@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { approvals, demoContainers, demoProject, stateOrder } from "@/lib/designData";
-import { Avatar, StatePill, fmtDate } from "@/components/design/Primitives";
+import { Avatar, StatePill } from "@/components/design/Primitives";
+import { fmtDate } from "@/lib/fmt";
 import type { ContainerState, PaginatedResponse, Project } from "@/types";
 
 function stateCount(state: ContainerState) {

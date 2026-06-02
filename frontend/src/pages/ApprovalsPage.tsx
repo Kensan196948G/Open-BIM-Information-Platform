@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Check, Clock, ExternalLink, RotateCcw, X } from "lucide-react";
 import { approvals, userById } from "@/lib/designData";
-import { Avatar, SecurityPill, StatePill, fmtDate } from "@/components/design/Primitives";
+import { Avatar, SecurityPill, StatePill } from "@/components/design/Primitives";
+import { fmtDate } from "@/lib/fmt";
 
 export default function ApprovalsPage() {
   const [tasks, setTasks] = useState([...approvals]);

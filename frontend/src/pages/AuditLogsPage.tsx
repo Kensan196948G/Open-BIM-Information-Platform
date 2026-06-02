@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Download, Lock, Search, Shield, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { auditSamples } from "@/lib/designData";
-import { EmptyState, ResultBadge, fmtDate } from "@/components/design/Primitives";
+import { EmptyState, ResultBadge } from "@/components/design/Primitives";
+import { fmtDate } from "@/lib/fmt";
 import type { AuditLog, PaginatedResponse } from "@/types";
 
 function hashStub(id: string) {

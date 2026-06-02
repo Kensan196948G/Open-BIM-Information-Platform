@@ -17,8 +17,8 @@ import {
   NamingBadge,
   SecurityPill,
   StatePill,
-  fmtDate,
 } from "@/components/design/Primitives";
+import { fmtDate } from "@/lib/fmt";
 import { demoInformationContainers, namingSegments, stateOrder } from "@/lib/designData";
 import type {
   ContainerState,

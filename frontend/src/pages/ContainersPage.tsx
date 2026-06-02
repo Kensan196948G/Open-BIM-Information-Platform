@@ -69,8 +69,10 @@ export default function ContainersPage() {
     enabled: !!projectId && projectId !== "demo",
   });
 
-  const sourceItems =
-    projectId === "demo" ? demoInformationContainers : (data?.items ?? []);
+  const sourceItems = useMemo(
+    () => projectId === "demo" ? demoInformationContainers : (data?.items ?? []),
+    [projectId, data?.items],
+  );
   const sourceTotal =
     projectId === "demo" ? demoInformationContainers.length : (data?.total ?? 0);
   const loading = projectId === "demo" ? false : isLoading;
