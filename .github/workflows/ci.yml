@@ -41,6 +41,19 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin123
+        options: >-
+          --health-cmd "curl -sf http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+        ports:
+          - 9000:9000
+        # minio server requires a command — set as entrypoint override via env
     defaults:
       run:
         working-directory: backend
@@ -48,6 +61,11 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://bim_user:bim_password@localhost:5432/bim_test
       SECRET_KEY: test-secret-key
       ENVIRONMENT: test
+      MINIO_ENDPOINT: localhost:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      MINIO_SECURE: "false"
+      MINIO_BUCKET: bim-containers
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -55,6 +73,20 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -e ".[dev]"
+      - name: Create MinIO bucket
+        run: |
+          pip install awscli-local 2>/dev/null || true
+          python -c "
+          import boto3, botocore
+          s3 = boto3.client('s3', endpoint_url='http://localhost:9000',
+            aws_access_key_id='minioadmin', aws_secret_access_key='minioadmin123',
+            region_name='us-east-1')
+          try:
+            s3.create_bucket(Bucket='bim-containers')
+          except Exception as e:
+            print(f'Bucket may exist: {e}')
+          print('MinIO bucket ready')
+          "
       - run: pytest --cov=app --cov-report=xml -v
       - uses: codecov/codecov-action@v4
         if: always()
