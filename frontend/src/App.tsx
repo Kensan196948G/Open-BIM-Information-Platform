@@ -9,6 +9,7 @@ import ContainerDetailPage from "@/pages/ContainerDetailPage";
 import UploadPage from "@/pages/UploadPage";
 import ApprovalsPage from "@/pages/ApprovalsPage";
 import RequirementsPage from "@/pages/RequirementsPage";
+import NamingRulesPage from "@/pages/NamingRulesPage";
 import Layout from "@/components/Layout";
 import { Settings } from "lucide-react";
 
@@ -41,6 +42,10 @@ export default function App() {
           element={<ContainerDetailPage />}
         />
         <Route path="projects/:projectId/upload" element={<UploadPage />} />
+        <Route
+          path="projects/:projectId/naming-rules"
+          element={<NamingRulesPage />}
+        />
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="requirements" element={<RequirementsPage />} />
         <Route path="audit-logs" element={<AuditLogsPage />} />
@@ -49,7 +54,10 @@ export default function App() {
           element={
             <div className="mx-auto max-w-4xl p-6">
               <div className="app-card-pad py-16 text-center">
-                <Settings className="mx-auto mb-3 h-10 w-10" style={{ color: "var(--text-3)" }} />
+                <Settings
+                  className="mx-auto mb-3 h-10 w-10"
+                  style={{ color: "var(--text-3)" }}
+                />
                 <div className="t-h2">設定</div>
                 <div className="t-sec mt-1">
                   命名規則マスタ、属性定義、ロール権限の管理画面です。
