@@ -145,8 +145,8 @@ async def test_naming_validate_requires_auth(client: AsyncClient):
         "/api/v1/naming/validate",
         json={"identifier": "PROJ-ORG-ZZ-GF-DR-AR-0001"},
     )
-    # HTTPBearer returns 401 when no Authorization header is present
-    assert res.status_code == 401
+    # FastAPI HTTPBearer returns 403 (not 401) when no Authorization header is present
+    assert res.status_code == 403
 
 
 # ─── Full approval flow integration tests ──────────────────────────────────────

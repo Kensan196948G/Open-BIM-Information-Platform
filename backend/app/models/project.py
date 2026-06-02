@@ -43,6 +43,9 @@ class Project(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     containers: Mapped[list["InformationContainer"]] = relationship(
         back_populates="project"
     )
+    naming_rule: Mapped["ProjectNamingRule | None"] = relationship(
+        back_populates="project", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class ProjectMember(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -71,5 +74,6 @@ class ProjectMember(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 
 from app.models.container import InformationContainer  # noqa: E402, F401
+from app.models.naming_rule import ProjectNamingRule  # noqa: E402, F401
 from app.models.organization import Organization  # noqa: E402, F401
 from app.models.role import Role  # noqa: E402, F401
