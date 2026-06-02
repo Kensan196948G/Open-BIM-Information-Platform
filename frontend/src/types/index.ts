@@ -68,3 +68,22 @@ export interface PaginatedResponse<T> {
   page?: number;
   size?: number;
 }
+
+export interface SegmentDefinition {
+  key: string;
+  label: string;
+  required: boolean;
+  max_length: number | null;
+  min_length: number | null;
+  allowed_values: string[];
+  pattern: string | null;
+  description: string;
+}
+
+export interface NamingRuleResponse {
+  id: string;
+  project_id: string;
+  separator: string;
+  segments: SegmentDefinition[];
+  is_default: boolean;
+}
