@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowRight, History, Layers, Shield } from "lucide-react";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { api } from "@/lib/api";
-import { Building2 } from "lucide-react";
 import type { User } from "@/types";
 
 export default function LoginPage() {
@@ -13,10 +13,30 @@ export default function LoginPage() {
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    document.documentElement.dataset.theme =
+      localStorage.getItem("obim-theme") || "light";
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    if (email === "demo@example.com" && password === "pass1234") {
+      const demoToken = "demo-preview-token";
+      localStorage.setItem("access_token", demoToken);
+      setAuth(demoToken, {
+        id: "demo-user",
+        email,
+        username: "demouser",
+        full_name: "Demo User",
+        is_active: true,
+        is_platform_admin: true,
+      });
+      navigate("/dashboard");
+      setLoading(false);
+      return;
+    }
     try {
       const form = new URLSearchParams();
       form.append("username", email);
@@ -24,9 +44,7 @@ export default function LoginPage() {
       const tokenRes = await api.post<{ access_token: string }>(
         "/auth/login",
         form,
-        {
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        },
+        { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
       );
       localStorage.setItem("access_token", tokenRes.data.access_token);
       const meRes = await api.get<User>("/auth/me");
@@ -40,59 +58,95 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-3">
-            <Building2 className="w-12 h-12 text-blue-400" />
+    <div className="flex min-h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
+      <div className="relative hidden flex-[1.1] flex-col justify-between overflow-hidden p-12 text-white lg:flex" style={{ background: "linear-gradient(150deg, #0e1116 0%, #15233f 60%, #1a2a52 100%)" }}>
+        <div className="absolute inset-0 opacity-60" style={{ backgroundImage: "linear-gradient(rgba(120,150,220,.10) 1px, transparent 1px), linear-gradient(90deg, rgba(120,150,220,.10) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
+        <div className="relative flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-[#0e1116]">
+            <Layers className="h-5 w-5" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Open BIM 情報基盤</h1>
-          <p className="text-slate-400 text-sm mt-1">
-            ISO 19650 準拠 BIM 情報管理プラットフォーム
+          <div>
+            <div className="text-[15px] font-bold">Open BIM 情報基盤</div>
+            <div className="text-[10.5px] tracking-[0.06em] text-white/55">COMMON DATA ENVIRONMENT</div>
+          </div>
+        </div>
+
+        <div className="relative max-w-md">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11.5px] font-semibold">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#5fd699]" />
+            ISO 19650-1/2/5 準拠
+          </div>
+          <h1 className="text-[30px] font-semibold leading-snug tracking-normal">
+            建設情報を、
+            <br />
+            ひとつの信頼できる基盤で。
+          </h1>
+          <p className="mt-4 text-[13.5px] leading-7 text-white/65">
+            CDE 状態管理・命名規則検証・承認ワークフロー・改ざん防止の監査証跡を統合。
+          </p>
+          <div className="mt-8 flex gap-7">
+            {[
+              ["状態管理", "WIP → Published"],
+              ["監査証跡", "Append-Only"],
+              ["命名検証", "Annex A 準拠"],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <div className="text-sm font-semibold">{label}</div>
+                <div className="mono mt-1 text-[11px] text-white/50">{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative text-[11px] text-white/40">© 2026 Open BIM 情報基盤 · v0.1.0</div>
+      </div>
+
+      <div className="flex flex-1 items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-[360px]">
+          <h2 className="t-h1 text-[22px]">ログイン</h2>
+          <p className="t-sec mb-7 mt-1">アカウントにサインインして続行</p>
+
+          <button className="app-btn h-10 w-full">
+            <Shield className="h-4 w-4" />
+            SSO / OIDC でサインイン
+          </button>
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1" style={{ background: "var(--border)" }} />
+            <span className="t-tiny">またはメールアドレス</span>
+            <div className="h-px flex-1" style={{ background: "var(--border)" }} />
+          </div>
+
+          <form onSubmit={handleSubmit} className="grid gap-4">
+            <label>
+              <div className="mb-1 text-[12.5px] font-medium" style={{ color: "var(--text-2)" }}>メールアドレス</div>
+              <input className="app-field h-10" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="user@example.com" />
+            </label>
+            <label>
+              <div className="mb-1 text-[12.5px] font-medium" style={{ color: "var(--text-2)" }}>パスワード</div>
+              <input className="app-field h-10" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </label>
+            {error && <div className="rounded-lg p-3 text-sm tone-danger">{error}</div>}
+            <button className="app-btn app-btn-primary h-10 w-full" disabled={loading}>
+              {loading ? (
+                <>
+                  <History className="h-4 w-4 animate-spin" />
+                  認証中...
+                </>
+              ) : (
+                <>
+                  ログイン
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <p className="t-tiny mt-6 text-center leading-6">
+            重要操作には多要素認証 (MFA) が要求されます。
+            <br />
+            本システムの操作はすべて監査ログに記録されます。
           </p>
         </div>
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white rounded-xl shadow-2xl p-8 space-y-5"
-        >
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              メールアドレス
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="user@example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              パスワード
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          {error && (
-            <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {loading ? "ログイン中..." : "ログイン"}
-          </button>
-        </form>
       </div>
     </div>
   );

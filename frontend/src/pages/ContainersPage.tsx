@@ -1,31 +1,60 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Box,
+  Check,
+  FileText,
+  Plus,
+  Search,
+  Upload,
+} from "lucide-react";
 import { api } from "@/lib/api";
-import { FileText, Plus, ArrowRight } from "lucide-react";
+import { demoInformationContainers } from "@/lib/designData";
+import {
+  EmptyState,
+  NamingBadge,
+  SecurityPill,
+  StatePill,
+} from "@/components/design/Primitives";
 import type {
+  ContainerState,
   InformationContainer,
   PaginatedResponse,
-  ContainerState,
 } from "@/types";
 
-const STATE_COLORS: Record<ContainerState, string> = {
-  WIP: "bg-gray-100 text-gray-700",
-  Shared: "bg-blue-100 text-blue-700",
-  Published: "bg-green-100 text-green-700",
-  Archived: "bg-amber-100 text-amber-700",
+const stateTabs: Array<ContainerState | "all"> = [
+  "all",
+  "WIP",
+  "Shared",
+  "Published",
+  "Archived",
+];
+
+const transitions: Partial<
+  Record<ContainerState, { action: string; label: string; next: ContainerState; icon: typeof ArrowRight }>
+> = {
+  WIP: { action: "submit", label: "提出", next: "Shared", icon: ArrowRight },
+  Shared: { action: "approve", label: "承認", next: "Published", icon: Check },
+  Published: { action: "archive", label: "保管", next: "Archived", icon: ArrowRight },
 };
 
-const TRANSITION_ACTIONS: Partial<
-  Record<ContainerState, { action: string; label: string; next: string }>
-> = {
-  WIP: { action: "submit", label: "Shared へ提出", next: "Shared" },
-  Shared: { action: "approve", label: "Published へ承認", next: "Published" },
-  Published: { action: "archive", label: "Archive へ保管", next: "Archived" },
-};
+function namingStatus(container: InformationContainer): "pass" | "warn" | "fail" {
+  if (container.naming_valid) return "pass";
+  return container.naming_issues?.includes("不足") ? "fail" : "warn";
+}
 
 export default function ContainersPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [stateFilter, setStateFilter] = useState<ContainerState | "all">(
+    (searchParams.get("state") as ContainerState | null) ?? "all",
+  );
+  const [q, setQ] = useState("");
+  const [namingOnly, setNamingOnly] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [title, setTitle] = useState("");
@@ -35,12 +64,16 @@ export default function ContainersPage() {
     queryKey: ["containers", projectId],
     queryFn: () =>
       api
-        .get<
-          PaginatedResponse<InformationContainer>
-        >(`/projects/${projectId}/containers`)
+        .get<PaginatedResponse<InformationContainer>>(`/projects/${projectId}/containers`)
         .then((r) => r.data),
-    enabled: !!projectId,
+    enabled: !!projectId && projectId !== "demo",
   });
+
+  const sourceItems =
+    projectId === "demo" ? demoInformationContainers : (data?.items ?? []);
+  const sourceTotal =
+    projectId === "demo" ? demoInformationContainers.length : (data?.total ?? 0);
+  const loading = projectId === "demo" ? false : isLoading;
 
   const createMutation = useMutation({
     mutationFn: (body: { identifier: string; title: string }) =>
@@ -57,141 +90,209 @@ export default function ContainersPage() {
     mutationFn: ({
       containerId,
       action,
+      targetState,
     }: {
       containerId: string;
       action: string;
+      targetState: ContainerState;
     }) =>
-      api
-        .post(`/projects/${projectId}/containers/${containerId}/transition`, {
-          action,
-          target_state:
-            TRANSITION_ACTIONS[
-              data?.items.find((c) => c.id === containerId)
-                ?.current_state as ContainerState
-            ]?.next,
-        })
-        .then((r) => r.data),
+      api.post(`/projects/${projectId}/containers/${containerId}/transition`, {
+        action,
+        target_state: targetState,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["containers", projectId] });
     },
   });
 
+  const rows = useMemo(() => {
+    let next = sourceItems;
+    if (stateFilter !== "all") next = next.filter((c) => c.current_state === stateFilter);
+    if (namingOnly) next = next.filter((c) => !c.naming_valid);
+    if (q) {
+      const f = q.toLowerCase();
+      next = next.filter(
+        (c) =>
+          c.identifier.toLowerCase().includes(f) ||
+          c.title.toLowerCase().includes(f),
+      );
+    }
+    return next;
+  }, [namingOnly, q, sourceItems, stateFilter]);
+
+  const counts = Object.fromEntries(
+    stateTabs.map((state) => [
+      state,
+      state === "all"
+        ? sourceItems.length
+        : sourceItems.filter((c) => c.current_state === state).length,
+    ]),
+  );
+
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto max-w-[1360px] p-5 sm:p-6">
+      <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">情報コンテナ</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            📊 全{data?.total ?? 0}件 · CDE管理
-          </p>
+          <h1 className="t-display">情報コンテナ</h1>
+          <p className="t-sec mt-1">CDE 管理下の全 {sourceTotal} 件</p>
+        </div>
+        <div className="flex gap-2">
+          <button className="app-btn" onClick={() => navigate(`/projects/${projectId}/upload`)}>
+            <Upload className="h-4 w-4" />
+            アップロード
+          </button>
+          <button className="app-btn app-btn-primary" onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4" />
+            コンテナ登録
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4 flex gap-1 overflow-x-auto border-b" style={{ borderColor: "var(--border)" }}>
+        {stateTabs.map((state) => {
+          const active = stateFilter === state;
+          return (
+            <button
+              key={state}
+              onClick={() => setStateFilter(state)}
+              className="relative flex items-center gap-2 px-3 py-2 text-[13px]"
+              style={{ color: active ? "var(--text)" : "var(--text-2)", fontWeight: active ? 600 : 450 }}
+            >
+              {state !== "all" && <span className="app-dot" style={{ background: `var(--${state.toLowerCase()}-dot)` }} />}
+              {state === "all" ? "すべて" : state}
+              <span className="mono text-[11px]" style={{ color: "var(--text-3)" }}>{counts[state]}</span>
+              {active && <span className="absolute inset-x-0 bottom-[-1px] h-0.5 rounded bg-[var(--primary)]" />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[240px] flex-1 sm:max-w-sm">
+          <Search className="absolute left-3 top-2.5 h-4 w-4" style={{ color: "var(--text-3)" }} />
+          <input className="app-field pl-9" value={q} onChange={(e) => setQ(e.target.value)} placeholder="識別子・タイトルで検索..." />
         </div>
         <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+          className="app-btn"
+          onClick={() => setNamingOnly(!namingOnly)}
+          style={namingOnly ? { background: "var(--warning-bg)", borderColor: "var(--warning)", color: "var(--warning-fg)" } : undefined}
         >
-          <Plus className="w-4 h-4" />
-          コンテナ登録
+          <AlertTriangle className="h-4 w-4" />
+          命名要対応
         </button>
       </div>
 
       {showForm && (
         <form
+          className="app-card-pad mb-4"
           onSubmit={(e) => {
             e.preventDefault();
-            createMutation.mutate({ identifier, title });
+            if (projectId === "demo") {
+              setShowForm(false);
+              setIdentifier("");
+              setTitle("");
+            } else {
+              createMutation.mutate({ identifier, title });
+            }
           }}
-          className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6 space-y-3"
         >
-          <h2 className="font-semibold text-blue-900">新規情報コンテナ</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              required
-              placeholder="識別子 (例: PRJ-XXX-A-01-DOC-001)"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
-            />
-            <input
-              required
-              placeholder="タイトル"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
+          <div className="t-h2 mb-3">新規情報コンテナ</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input className="app-field mono" required placeholder="識別子 (例: PRJ-XXX-A-01-DOC-001)" value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
+            <input className="app-field" required placeholder="タイトル" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={createMutation.isPending}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
+          <div className="mt-3 flex gap-2">
+            <button className="app-btn app-btn-primary" disabled={createMutation.isPending}>
               {createMutation.isPending ? "登録中..." : "登録"}
             </button>
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="border border-gray-300 px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
-            >
+            <button type="button" className="app-btn" onClick={() => setShowForm(false)}>
               キャンセル
             </button>
           </div>
         </form>
       )}
 
-      {isLoading ? (
-        <div className="text-center py-12 text-gray-400">読み込み中...</div>
-      ) : (
-        <div className="space-y-2">
-          {data?.items.map((container) => {
-            const transition = TRANSITION_ACTIONS[container.current_state];
-            return (
-              <div
-                key={container.id}
-                className="bg-white border border-gray-100 rounded-xl p-4 flex items-center gap-4"
-              >
-                <FileText className="w-7 h-7 text-violet-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-mono text-sm font-semibold text-gray-900">
-                    {container.identifier}
-                  </p>
-                  <p className="text-sm text-gray-500 truncate">
-                    {container.title}
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Rev: {container.current_revision}
-                  </p>
-                </div>
-                <span
-                  className={`text-xs px-2 py-1 rounded font-semibold ${STATE_COLORS[container.current_state]}`}
-                >
-                  {container.current_state}
-                </span>
-                {transition && (
-                  <button
-                    onClick={() =>
-                      transitionMutation.mutate({
-                        containerId: container.id,
-                        action: transition.action,
-                      })
-                    }
-                    disabled={transitionMutation.isPending}
-                    className="flex items-center gap-1 text-xs border border-blue-300 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-50 whitespace-nowrap"
-                  >
-                    <ArrowRight className="w-3 h-3" />
-                    {transition.label}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          {data?.items.length === 0 && (
-            <div className="text-center py-16 text-gray-400">
-              <FileText className="w-12 h-12 mx-auto mb-3 text-gray-200" />
-              <p>コンテナがありません。登録してください。</p>
-            </div>
-          )}
+      <div className="app-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="app-table min-w-[980px]">
+            <thead>
+              <tr>
+                <th>識別子 / タイトル</th>
+                <th>種別</th>
+                <th>状態</th>
+                <th>改訂</th>
+                <th>命名</th>
+                <th>分類</th>
+                <th style={{ width: 130 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="text-center" style={{ color: "var(--text-3)" }}>
+                    読み込み中...
+                  </td>
+                </tr>
+              ) : (
+                rows.map((container) => {
+                  const transition = transitions[container.current_state];
+                  const ActionIcon = transition?.icon;
+                  return (
+                    <tr key={container.id} className="cursor-pointer" onClick={() => navigate(`/projects/${projectId}/containers/${container.id}`)}>
+                      <td className="max-w-[360px]">
+                        <div className="mono truncate text-[12.5px] font-semibold" style={{ color: "var(--text)" }}>{container.identifier}</div>
+                        <div className="truncate text-xs" style={{ color: "var(--text-2)" }}>{container.title}</div>
+                      </td>
+                      <td>
+                        <span className="inline-flex items-center gap-2 text-[12.5px]" style={{ color: "var(--text-2)" }}>
+                          <FileText className="h-4 w-4" />
+                          {container.container_type}
+                        </span>
+                      </td>
+                      <td><StatePill state={container.current_state} /></td>
+                      <td><span className="mono text-[12.5px]">{container.current_revision}</span></td>
+                      <td><NamingBadge status={namingStatus(container)} /></td>
+                      <td><SecurityPill level={container.security_level} /></td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        {transition && ActionIcon ? (
+                          <button
+                            className="app-btn app-btn-sm"
+                            disabled={transitionMutation.isPending}
+                            onClick={() => {
+                              if (projectId !== "demo") {
+                                transitionMutation.mutate({
+                                  containerId: container.id,
+                                  action: transition.action,
+                                  targetState: transition.next,
+                                });
+                              }
+                            }}
+                          >
+                            <ActionIcon className="h-3.5 w-3.5" />
+                            {transition.label}
+                          </button>
+                        ) : (
+                          <span className="t-tiny">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+        {!loading && rows.length === 0 && (
+          <EmptyState icon={<Box className="h-6 w-6" />} title="該当するコンテナがありません" sub="フィルタ条件を変更してください。" />
+        )}
+      </div>
+
+      <div className="mt-4 text-right">
+        <Link className="app-btn app-btn-ghost app-btn-sm" to={`/projects/${projectId}/upload`}>
+          命名規則ビルダーで登録する
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
     </div>
   );
 }
