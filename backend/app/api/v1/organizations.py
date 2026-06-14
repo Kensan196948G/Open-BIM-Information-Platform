@@ -27,8 +27,8 @@ async def list_organizations(
     if current_user.is_platform_admin:
         result = await db.execute(
             select(Organization)
-            .where(Organization.is_active == True)
-            .order_by(Organization.name)  # noqa: E712
+            .where(Organization.is_active.is_(True))
+            .order_by(Organization.name)
         )
         orgs = result.scalars().all()
     else:
