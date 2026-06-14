@@ -249,3 +249,84 @@ async def test_container_uses_custom_naming_rule(client: AsyncClient):
     )
     assert invalid_res.status_code == 201
     assert invalid_res.json()["naming_valid"] is False
+
+
+# ─── Auth guards ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_naming_rule_requires_auth(client: AsyncClient):
+    _, proj_id = await _setup_org_project()
+    res = await client.get(f"/api/v1/projects/{proj_id}/naming-rules")
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_put_naming_rule_requires_auth(client: AsyncClient):
+    _, proj_id = await _setup_org_project()
+    res = await client.put(
+        f"/api/v1/projects/{proj_id}/naming-rules",
+        json={
+            "separator": "-",
+            "segments": [{"key": "a", "label": "A", "required": True}],
+        },
+    )
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_delete_naming_rule_requires_auth(client: AsyncClient):
+    _, proj_id = await _setup_org_project()
+    res = await client.delete(f"/api/v1/projects/{proj_id}/naming-rules")
+    assert res.status_code == 401
+
+
+# ─── Non-member access (returns 404 to avoid info leakage) ───────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_naming_rule_non_member_returns_404(client: AsyncClient):
+    _, proj_id = await _setup_org_project()
+    token, _ = await _register_and_login(client, "nr8@example.com", "nr8")
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/naming-rules",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_put_naming_rule_non_member_returns_404(client: AsyncClient):
+    _, proj_id = await _setup_org_project()
+    token, _ = await _register_and_login(client, "nr9@example.com", "nr9")
+    res = await client.put(
+        f"/api/v1/projects/{proj_id}/naming-rules",
+        json={
+            "separator": "_",
+            "segments": [{"key": "a", "label": "A", "required": True}],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_naming_rule_non_member_returns_404(client: AsyncClient):
+    _, proj_id = await _setup_org_project()
+    token, _ = await _register_and_login(client, "nr10@example.com", "nr10")
+    res = await client.delete(
+        f"/api/v1/projects/{proj_id}/naming-rules",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_naming_rule_unknown_project_returns_404(client: AsyncClient):
+    token, _ = await _register_and_login(client, "nr11@example.com", "nr11")
+    nonexistent = str(uuid.uuid4())
+    res = await client.get(
+        f"/api/v1/projects/{nonexistent}/naming-rules",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
