@@ -330,3 +330,103 @@ async def test_get_naming_rule_unknown_project_returns_404(client: AsyncClient):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 404
+
+
+# ─── Platform admin bypass ────────────────────────────────────────────────────
+
+
+async def _make_platform_admin(user_id: str) -> None:
+    """Elevate user to platform admin via direct DB mutation (no API endpoint exists)."""
+    from sqlalchemy import update
+
+    from app.models.user import User
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.id == user_id).values(is_platform_admin=True)
+        )
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_can_get_naming_rule_of_any_project(client: AsyncClient):
+    """Platform admin bypasses org membership check and can read any project's naming rule."""
+    _, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "nr_pa1@example.com", "nr_pa1")
+    await _make_platform_admin(user_id)
+    # Re-login so JWT reflects current state (explicit refresh for clarity)
+    login = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "nr_pa1@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    token = login.json()["access_token"]
+
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/naming-rules",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    assert "segments" in res.json()
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_can_put_naming_rule_of_any_project(client: AsyncClient):
+    """Platform admin can set a custom naming rule for any project without org membership."""
+    _, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "nr_pa2@example.com", "nr_pa2")
+    await _make_platform_admin(user_id)
+    login = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "nr_pa2@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    token = login.json()["access_token"]
+
+    res = await client.put(
+        f"/api/v1/projects/{proj_id}/naming-rules",
+        json={
+            "separator": "_",
+            "segments": [
+                {"key": "proj", "label": "Project", "required": True},
+                {"key": "seq", "label": "Sequence", "required": True},
+            ],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    assert res.json()["is_default"] is False
+    assert res.json()["separator"] == "_"
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_can_delete_naming_rule_of_any_project(
+    client: AsyncClient,
+):
+    """Platform admin can reset any project's naming rule to default without org membership."""
+    _, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "nr_pa3@example.com", "nr_pa3")
+    await _make_platform_admin(user_id)
+    login = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "nr_pa3@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    token = login.json()["access_token"]
+
+    # First set a custom rule so DELETE has something to remove
+    await client.put(
+        f"/api/v1/projects/{proj_id}/naming-rules",
+        json={
+            "separator": ".",
+            "segments": [{"key": "x", "label": "X", "required": True}],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    res = await client.delete(
+        f"/api/v1/projects/{proj_id}/naming-rules",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 204
