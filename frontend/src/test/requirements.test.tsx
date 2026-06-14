@@ -121,13 +121,17 @@ describe("RequirementsPage", () => {
 
   it("文書一覧に EIR と BEP が表示される", async () => {
     wrap(<RequirementsPage />);
-    expect(await screen.findByText("雇用主情報要件")).toBeInTheDocument();
+    // EIR title appears in both list and detail panel (auto-selected), so use findAllByText
+    expect(
+      (await screen.findAllByText("雇用主情報要件")).length,
+    ).toBeGreaterThan(0);
     expect(await screen.findByText("BIM 実行計画")).toBeInTheDocument();
   });
 
   it("承認済ステータスバッジが表示される", async () => {
     wrap(<RequirementsPage />);
-    expect(await screen.findByText("承認済")).toBeInTheDocument();
+    // "承認済" appears in both list badge and detail panel badge for auto-selected EIR
+    expect((await screen.findAllByText("承認済")).length).toBeGreaterThan(0);
   });
 
   it("ドラフトステータスバッジが表示される", async () => {
@@ -139,7 +143,8 @@ describe("RequirementsPage", () => {
     const user = userEvent.setup();
     wrap(<RequirementsPage />);
 
-    const docBtn = await screen.findByText("雇用主情報要件");
+    // Use getAllByText since title appears in list and (auto-selected) detail panel
+    const docBtn = (await screen.findAllByText("雇用主情報要件"))[0];
     await user.click(docBtn);
 
     await waitFor(() => {
@@ -152,7 +157,8 @@ describe("RequirementsPage", () => {
     const user = userEvent.setup();
     wrap(<RequirementsPage />);
 
-    const docBtn = await screen.findByText("雇用主情報要件");
+    // Use getAllByText since title appears in list and (auto-selected) detail panel
+    const docBtn = (await screen.findAllByText("雇用主情報要件"))[0];
     await user.click(docBtn);
 
     await waitFor(() => {
