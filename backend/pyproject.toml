@@ -39,6 +39,7 @@ dev = [
     "faker>=25.0.0",
     "aiosqlite>=0.20.0",
     "moto[s3]>=5.0.0",
+    "pytest-timeout>=2.2.0",
 ]
 
 [tool.ruff]
