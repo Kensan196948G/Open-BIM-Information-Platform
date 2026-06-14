@@ -11,6 +11,7 @@ from app.api.v1 import (
     naming,
     naming_rules,
     projects,
+    rbac,
     uploads,
     workflows,
 )
@@ -61,6 +62,7 @@ app.include_router(containers.router, prefix=API_PREFIX)
 app.include_router(naming_rules.router, prefix=API_PREFIX)
 app.include_router(audit_logs.router, prefix=API_PREFIX)
 app.include_router(naming.router, prefix=API_PREFIX)
+app.include_router(rbac.router, prefix=API_PREFIX)
 app.include_router(uploads.router, prefix=API_PREFIX)
 app.include_router(workflows.router, prefix=API_PREFIX)
 
