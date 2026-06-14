@@ -153,8 +153,8 @@ test.describe("Workflow API — live backend", () => {
         workflow_type: "state_transition",
       },
     });
-    // No auth token → 403 (FastAPI HTTPBearer returns 403 for missing header)
-    expect(res.status()).toBe(403);
+    // No auth token → 401 (actual observed behavior from FastAPI + CurrentUser dependency)
+    expect(res.status()).toBe(401);
   });
 
   test("workflow creation with unknown project returns 404", async ({
