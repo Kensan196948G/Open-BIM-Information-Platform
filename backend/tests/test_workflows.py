@@ -470,7 +470,7 @@ async def test_act_on_approval_not_found(client: AsyncClient):
     ap_id = str(uuid.uuid4())
     res = await client.post(
         f"/api/v1/workflows/{wf_id}/approvals/{ap_id}/act",
-        json={"action": "approve"},
+        json={"result": "approved"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 404
