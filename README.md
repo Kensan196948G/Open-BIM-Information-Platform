@@ -1,326 +1,157 @@
-# 🏗️ Open BIM 情報基盤
+# Open BIM 情報基盤
 
-> **ISO 19650 準拠 BIM 情報管理プラットフォーム**
-> Common Data Environment (CDE) 状態管理・命名規則検証・承認ワークフロー・監査証跡を統合した Web システム
+> 建設・土木プロジェクトの図面・モデル・文書を、国際規格に基づいて安全に一元管理するシステムです。
 
 [![CI](https://github.com/Kensan196948G/Open-BIM-Information-Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Kensan196948G/Open-BIM-Information-Platform/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v0.1.0_Release_Ready-success)](https://github.com/Kensan196948G/Open-BIM-Information-Platform/releases)
-![Python](https://img.shields.io/badge/Python-3.11-blue)
-![React](https://img.shields.io/badge/React-18-61DAFB)
-![ISO 19650](https://img.shields.io/badge/ISO-19650-green)
-![Tests](https://img.shields.io/badge/tests-35_backend_%2B_8_frontend_%2B_9_E2E-brightgreen)
-![Security](https://img.shields.io/badge/security-Critical%2FHigh_0-success)
+[![ISO 19650](https://img.shields.io/badge/準拠規格-ISO%2019650-green)](https://www.iso.org/standard/68078.html)
 
 ---
 
-## 📌 概要
+## このシステムについて
 
-| 項目              | 内容                                               |
-| ----------------- | -------------------------------------------------- |
-| 🌐 提供形態       | Web ベース統合システム                             |
-| 📐 準拠規格       | ISO 19650-1/2/5                                    |
-| 🗄️ バックエンド   | FastAPI (Python 3.11) + PostgreSQL 15              |
-| 🖥️ フロントエンド | React 18 + TypeScript + Vite (ライト/ダークモード) |
-| 🔐 認証           | JWT + OIDC 対応準備済み                            |
-| 📦 ファイル管理   | MinIO (S3 互換) + SHA-256 検証                     |
-| 🐳 インフラ       | Docker Compose                                     |
-| 🔧 テスト         | pytest / vitest v4 / Playwright E2E                |
+建設・土木プロジェクトでは、図面・モデル・設計文書が大量に生まれます。
+版違いの図面を使い続けた、誰かが勝手にファイルを上書きした、誰が承認したか分からない——
+そうした現場の混乱を防ぐために開発されたシステムです。
+
+国際規格 **ISO 19650**（BIM 情報管理の国際標準）に基づき、**情報の登録・承認・公開・保管**を
+一つの流れとして管理します。すべての操作は自動的に記録され、後から検索・確認できます。
 
 ---
 
-## 🗺️ アーキテクチャ
+## どんな課題を解決するか
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Browser (React 18 + TypeScript + Vite)                         │
-│  ダッシュボード / プロジェクト / 情報コンテナ(CDE) / 承認タスク  │
-│  要求文書(EIR/BEP) / アップロード / 監査ログ / 設定              │
-│  ↑ ライト/ダークモード・デザイントークン・ISO 19650 命名バリデータ │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ REST API (/api/v1/*)
-┌──────────────────────────▼──────────────────────────────────────┐
-│  FastAPI (Python 3.11)                                           │
-│  auth / projects / containers / workflows / naming-rules         │
-│  uploads / audit-logs / naming/validate                          │
-│  ↑ JWT auth・RBAC・SELECT FOR UPDATE 排他制御・監査トリガー       │
-└──────┬──────────┬──────────┬──────────┬──────────────────────────┘
-       │          │          │          │
-       ▼          ▼          ▼          ▼
-PostgreSQL 15  Redis     MinIO      Alembic
-(メタDB+      (キャッシュ) (ファイル   (スキーマ
- 監査ログ)               ストレージ)  マイグレーション)
-```
+| よくある現場の困りごと | このシステムでの解決 |
+|---|---|
+| 最新の図面がどれか分からない | 「承認済み」状態の図面だけが現場に届く仕組み |
+| 古い版を誰かが間違って使った | 版管理と状態管理で「作業中／公式／保管」を明確に区別 |
+| 承認のやり取りがメールで埋もれる | 承認ワークフローをシステム上で完結・追跡可能 |
+| 監査で「誰がいつ承認したか」を問われる | すべての操作が自動記録（消去・改ざん不可） |
+| 社内外でファイルの共有ルールがバラバラ | 命名規則を自動チェック、不適合を即座に検出 |
 
-### 📐 CDE 状態機械
+---
 
-```
-                 submit          approve
-  ┌─── WIP ─────────────▶ Shared ──────────▶ Published ─┐
-  │     ▲                   │                            │ archive
-  │     └───── return ──────┘                            │
-  │                                                      ▼
-  └───────────────────────────────────────────────── Archived
+## 主な機能
+
+### 情報の流れ（コモン・データ・エンバイロンメント）
+
+```mermaid
+flowchart LR
+    A["🟡 作業中\n個人・チームで編集"]
+    B["🔵 共有・レビュー\nチーム全体で確認"]
+    C["🟢 承認済み・公式\n現場・関係者に公開"]
+    D["⬜ 保管\n履歴として永久保存"]
+
+    A -->|"チームへ提出"| B
+    B -->|"承認・発行"| C
+    C -->|"改訂開始"| A
+    C -->|"完了・終了"| D
+    B -->|"差し戻し"| A
+
+    style A fill:#FFF3CD,stroke:#FFC107,color:#333
+    style B fill:#CCE5FF,stroke:#0D6EFD,color:#333
+    style C fill:#D4EDDA,stroke:#28A745,color:#333
+    style D fill:#E2E3E5,stroke:#6C757D,color:#333
 ```
 
----
-
-## 🎬 主要機能
-
-### 📂 CDE 情報コンテナ管理
-
-| 機能                   | 内容                                            |
-| ---------------------- | ----------------------------------------------- |
-| 状態遷移               | WIP → Shared → Published → Archived (差戻し可)  |
-| 命名規則検証           | ISO 19650-2 Annex A 準拠・7セグメント対応       |
-| プロジェクト別命名規則 | カスタムセグメント・区切り文字・許容値 CRUD     |
-| セキュリティ分類       | public / limited / confidential / restricted    |
-| リビジョン管理         | P01 → C01 ライフサイクル                        |
-| ファイル管理           | MinIO + SHA-256 + MIME allowlist + チャンク検証 |
-
-### 🔐 セキュリティ・認証
-
-| 機能       | 内容                                                |
-| ---------- | --------------------------------------------------- |
-| JWT 認証   | RS256 署名・Bearer token                            |
-| RBAC       | ISO 19650 契約ロールベース権限管理                  |
-| 監査ログ   | 改ざん防止 (Append-Only + PostgreSQL トリガー)      |
-| 脆弱性対策 | IDOR・DoS・XSS・PathTraversal・RaceCondition・ReDoS |
-
-### ✅ 承認ワークフロー
-
-| 機能         | 内容                                     |
-| ------------ | ---------------------------------------- |
-| 多段階承認   | check / review / approve / authorise     |
-| 排他制御     | SELECT FOR UPDATE による Write-Skew 防止 |
-| 状態自動遷移 | 承認完了で Container 状態を自動更新      |
-
-### 📋 要求文書管理 (ISO 19650)
-
-OIR → AIR → PIR → **EIR** → **BEP** → **MIDP** → **TIDP** の情報要求階層に対応
+すべての図面・文書はこの4段階の状態を経て管理されます。
+「作業中」のファイルが誤って現場に届くことはありません。
 
 ---
 
-## 🖥️ UI スクリーン一覧
+### 主な機能一覧
 
-| 画面              | パス                           | 機能                                       |
-| ----------------- | ------------------------------ | ------------------------------------------ |
-| 📊 ダッシュボード | `/dashboard`                   | KPI・CDE 状態サマリー・承認タスク一覧      |
-| 📁 プロジェクト   | `/projects`                    | プロジェクト CRUD・メンバー管理            |
-| 📦 情報コンテナ   | `/projects/:id/containers`     | CDE 管理・状態フィルタ・命名バリデーション |
-| 📦 コンテナ詳細   | `/projects/:id/containers/:id` | タブ式詳細・状態遷移ボタン                 |
-| ✅ 承認タスク     | `/approvals`                   | 双ペイン承認キュー・優先度・コメント       |
-| 📄 要求文書       | `/requirements`                | EIR/BEP/MIDP 文書ビューア                  |
-| ⬆️ アップロード   | `/projects/:id/upload`         | リアルタイム命名規則バリデーター           |
-| 🛡️ 監査ログ       | `/audit-logs`                  | 全操作履歴・フィルタ・ハッシュ値           |
-| ⚙️ 設定           | `/settings`                    | 命名規則マスタ・ロール権限 (実装中)        |
+**情報管理**
+- 図面・BIM モデル・文書を統一ルールで登録・管理
+- ISO 19650 に準拠した命名規則の自動チェック（不適合を即検出）
+- 版管理（改訂履歴をすべて保存）
 
----
+**承認・ワークフロー**
+- 担当者→承認者→公開 の承認フローをシステム上で管理
+- 承認待ち・差し戻し・完了の状態をリアルタイムで確認
 
-## 🛠️ セットアップ
+**情報セキュリティ**
+- 公開 / 限定 / 機密 / 制限付き の4段階のアクセス区分
+- 組織・プロジェクトごとのアクセス権限設定
 
-### 前提条件
+**監査・証跡**
+- 誰が・いつ・何を操作したかを自動記録
+- 記録の消去・改ざんは技術的に不可能な設計
+- J-SOX 対応・監査法人による確認に対応
 
-- Docker & Docker Compose v2.x
-- Git
-
-### クイックスタート
-
-```bash
-# 1. リポジトリクローン
-git clone https://github.com/Kensan196948G/Open-BIM-Information-Platform.git
-cd Open-BIM-Information-Platform
-
-# 2. 環境変数設定
-cp .env.example .env
-# .env を編集 (SECRET_KEY 等を設定)
-
-# 3. 起動
-docker compose up -d
-
-# 4. DB マイグレーション (全 2 マイグレーション)
-docker compose exec backend alembic upgrade head
-
-# 5. アクセス
-# フロントエンド:    http://localhost:5173
-# API ドキュメント:  http://localhost:8000/api/docs
-# MinIO コンソール:  http://localhost:9001
-```
-
-### ローカル開発
-
-```bash
-# Backend
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn app.main:app --reload
-
-# Frontend
-cd frontend
-npm install
-npm run dev
-```
+**ダッシュボード**
+- 全プロジェクトの承認状況・進捗を一覧表示
+- 承認待ち件数・未対応アラートを可視化
 
 ---
 
-## 🧪 テスト
+## 利用者ごとの使い方
 
-```bash
-# Backend (35 テスト)
-cd backend && pytest -v
+### 現場施工管理者
 
-# Frontend (vitest v4、8 テスト)
-cd frontend && npm test
+最新の承認済み図面・施工モデルを確認します。
+現場に届く情報は「承認済み」状態のものだけです。差し戻された図面や作業中のデータは表示されません。
 
-# E2E (Playwright + ライブバックエンド、9 テスト)
-cd frontend && npx playwright test
+### 設計・土木建設技術者
 
-# 型チェック
-cd frontend && npm run type-check
-cd backend && mypy app
-```
+担当する成果物を登録し、チームへ共有・承認申請を行います。
+命名規則のチェックはシステムが自動で行うため、規則の暗記は不要です。
 
----
+### 本社・支店の管理部門
 
-## 📊 品質ゲート (CI — 全 7 ジョブ)
+ダッシュボードから全プロジェクトの承認状況・進捗を確認します。
+承認待ちが滞留している案件を早期に把握し、対応を促すことができます。
 
-| ジョブ            | ツール                    | 基準           |
-| ----------------- | ------------------------- | -------------- |
-| 🔍 Backend Lint   | Ruff                      | エラー 0       |
-| 🧪 Backend Tests  | pytest + PostgreSQL       | 全 35 件通過   |
-| 🔍 Frontend Lint  | ESLint (--max-warnings 0) | 警告 0         |
-| 🧪 Frontend Tests | vitest v4 + coverage      | 全 8 件通過    |
-| 🏗️ Frontend Build | vite build                | 成功           |
-| 🔐 Security Scan  | gitleaks                  | シークレット 0 |
-| 🎭 E2E            | Playwright + live backend | 全 9 件通過    |
+### 経営役員
+
+全プロジェクトの健全性をダッシュボードで一覧確認します。
+リスクのある案件（承認遅延・規則違反）がアラートで表示されます。
+
+### 監査法人・内部監査担当
+
+監査証跡ログから、特定のプロジェクト・期間・操作者を絞り込んで確認できます。
+すべての記録は改ざん不可能な形式で保存されています。
 
 ---
 
-## 🔌 主要 API エンドポイント
+## 準拠規格・セキュリティ
 
-| エンドポイント                                     | メソッド           | 説明                                      |
-| -------------------------------------------------- | ------------------ | ----------------------------------------- |
-| `/api/v1/auth/register`                            | POST               | ユーザー登録                              |
-| `/api/v1/auth/login`                               | POST               | JWT トークン取得                          |
-| `/api/v1/projects`                                 | GET/POST           | プロジェクト一覧・作成                    |
-| `/api/v1/projects/{id}/containers`                 | GET/POST           | 情報コンテナ (命名自動検証)               |
-| `/api/v1/projects/{id}/containers/{id}/transition` | POST               | 状態遷移                                  |
-| **`/api/v1/projects/{id}/naming-rules`**           | **GET/PUT/DELETE** | **プロジェクト別命名規則 CRUD**           |
-| `/api/v1/naming/validate`                          | POST               | 命名規則検証 (プロジェクト固有ルール対応) |
-| `/api/v1/workflows`                                | POST               | 承認ワークフロー開始                      |
-| `/api/v1/workflows/{id}/approvals/{id}/act`        | POST               | 承認アクション                            |
-| `/api/v1/uploads`                                  | POST               | ファイルアップロード (MinIO)              |
-| `/api/v1/audit-logs`                               | GET                | 監査ログ一覧                              |
-
-完全な API 仕様: http://localhost:8000/api/docs (Swagger UI)
+| 項目 | 内容 |
+|---|---|
+| 情報管理規格 | ISO 19650-1/2 （BIM情報管理の国際標準） |
+| 命名規則 | ISO 19650 Annex A（7セグメント命名方式） |
+| セキュリティ設計 | J-SOX 対応・監査証跡 Append-Only 設計 |
+| アクセス管理 | ロールベースのアクセス制御（RBAC） |
+| パスワード | 業界標準の暗号化（bcrypt）を使用 |
 
 ---
 
-## 📁 プロジェクト構造
+## システム導入・運用について
 
-```
-Open-BIM-Information-Platform/
-├── backend/
-│   ├── app/
-│   │   ├── api/v1/
-│   │   │   ├── containers.py      # CDE 状態管理 (命名自動検証)
-│   │   │   ├── naming_rules.py    # ★ プロジェクト別命名規則 CRUD
-│   │   │   ├── naming.py          # 命名規則検証 (プロジェクト固有)
-│   │   │   ├── workflows.py       # 承認ワークフロー
-│   │   │   └── ...
-│   │   ├── models/
-│   │   │   ├── naming_rule.py     # ★ ProjectNamingRule
-│   │   │   └── ...
-│   │   ├── schemas/
-│   │   │   ├── naming_rule.py     # ★ ReDoS 防止バリデーション
-│   │   │   └── ...
-│   │   └── services/
-│   │       └── naming_validator.py  # ISO 19650 検証エンジン
-│   ├── alembic/versions/          # 2 マイグレーション
-│   └── tests/                     # 35 テスト
-├── frontend/
-│   └── src/
-│       ├── pages/                 # 9 画面
-│       │   ├── ApprovalsPage.tsx  # ★
-│       │   ├── ContainerDetailPage.tsx  # ★
-│       │   ├── RequirementsPage.tsx     # ★
-│       │   └── UploadPage.tsx           # ★
-│       ├── components/design/
-│       │   └── Primitives.tsx     # ★ StatePill/NamingBadge/Avatar
-│       └── lib/
-│           ├── designData.ts      # ★ ISO 19650 デモデータ
-│           └── fmt.ts             # ★ 日付フォーマット
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── OPERATIONS.md
-│   └── RELEASE_CHECKLIST.md
-├── .github/workflows/ci.yml       # 全 7 ジョブ CI
-└── docker-compose.yml
-```
+本システムの導入・設置・日常運用はIT部門が担当します。
+詳しくは各担当者向けドキュメントをご参照ください。
+
+| 対象 | ドキュメント |
+|---|---|
+| 💻 IT部門スタッフ（導入・運用担当） | [IT部門向けガイド](docs/IT_SETUP.md) |
+| 🔧 開発・保守担当エンジニア | [技術スタック詳細](docs/TECH_STACK.md) |
+| 🏗️ BIM管理者・設計担当 | [アーキテクチャ設計書](docs/ARCHITECTURE.md) |
 
 ---
 
-## 🚀 ロードマップ
+## よくある質問
 
-### ✅ Sprint 1 (完了)
+**Q. 使うためにBIMの専門知識は必要ですか？**
+A. 日常操作（図面の確認・承認申請）に専門知識は不要です。命名規則のチェックはシステムが自動で行います。
 
-- [x] 基盤整備 (Docker Compose + FastAPI + React + CI)
-- [x] DB モデル設計 (20 テーブル・Alembic)
-- [x] 認証 (JWT + bcrypt)
-- [x] CDE 状態遷移 API
-- [x] 命名規則検証エンジン (ISO 19650-2 Annex A)
-- [x] ファイルアップロード API (MinIO)
-- [x] 承認ワークフロー API
-- [x] 監査ログ API
-- [x] E2E テスト基盤 (Playwright)
-- [x] セキュリティ強化 (13 件修正)
+**Q. スマートフォンやタブレットでも使えますか？**
+A. Webブラウザがあれば端末を問わず利用できます。現場でのタブレット利用を想定した設計です。
 
-### ✅ Sprint 2 (完了)
+**Q. 既存のファイルサーバーと併用できますか？**
+A. 移行計画についてはIT部門またはシステム担当者にご相談ください。
 
-- [x] 命名規則プロジェクト別カスタム設定 API (#3)
-- [x] フロントエンド BIM デザインシステム (4 新画面)
-- [x] ISO 19650 命名バリデーター UI (リアルタイム)
-- [x] セキュリティ修正 3 件 (ReDoS/IDOR/入力検証)
-- [x] vitest v4 アップグレード (critical 脆弱性 2 件解消)
-
-### 🔜 Sprint 3 (計画中)
-
-- [ ] OIDC/SAML 認証連携 (Keycloak / Azure AD)
-- [ ] MinIO 実サービス統合テスト
-- [ ] 通知システム (アプリ内 + メール)
-- [ ] レポート出力 (CSV / PDF)
-- [ ] 命名規則設定 UI (フロントエンド)
-- [ ] GitHub Actions Node.js 24 移行 (期限: 2026-06-16)
+**Q. 監査証跡はいつまで保存されますか？**
+A. 保存期間の設定はシステム管理者が行います。記録は消去・改ざんが技術的に不可能な設計です。
 
 ---
 
-## 📊 品質メトリクス推移
-
-| 指標                  | Sprint 1 | Sprint 2  | 変化 |
-| --------------------- | -------- | --------- | ---- |
-| ✅ CI ジョブ          | 7/7      | 7/7       | →    |
-| 🧪 テスト合計         | 45 件    | **52 件** | ▲ +7 |
-| 🖥️ UI 画面数          | 5        | **9**     | ▲ +4 |
-| 🔌 API エンドポイント | ~20      | **~24**   | ▲ +4 |
-| 🔐 npm 脆弱性 (high+) | 0        | 0         | →    |
-| 🛡️ セキュリティ修正   | 13 件    | **16 件** | ▲ +3 |
-
----
-
-## 📚 ドキュメント
-
-| ドキュメント                                                    | 内容                                            |
-| --------------------------------------------------------------- | ----------------------------------------------- |
-| [🏛️ ARCHITECTURE.md](docs/ARCHITECTURE.md)                      | 設計思想・レイヤー構造・CDE状態機械・認可モデル |
-| [🛠️ OPERATIONS.md](docs/OPERATIONS.md)                          | デプロイ・ロールバック・監視・バックアップ      |
-| [🚀 RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)            | Gate-3 リリース判定・人間サインオフ欄           |
-| [📋 要件定義書](Open%20BIM%20情報基盤%20要件定義書.md)          | ISO 19650 業務要件・機能要件                    |
-| [📐 詳細仕様書](open-bim-information-platform-detailed-spec.md) | 画面・API・データモデル・状態遷移仕様           |
-
-> 🏁 **リリース状態**: v0.1.0 は **Release Ready（人間サインオフ待ち）**
-> CI 全 7 ジョブ green・STABLE 達成 (N=5)・Critical/High 脆弱性 0
-> 本番デプロイは [RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) のサインオフ後に人間が手動実行
-
----
-
-_ISO 19650 準拠 BIM 情報管理 © 2026 — [GitHub](https://github.com/Kensan196948G/Open-BIM-Information-Platform)_
+*ISO 19650-2:2018 準拠 · 監査証跡対応 · J-SOX 対応設計*

@@ -1,0 +1,20 @@
+# Demo mode: frontend only (no backend/DB required)
+# Usage: docker compose -f docker-compose.demo.yml up -d
+version: "3.9"
+
+services:
+  frontend-demo:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.demo
+    container_name: bim_frontend_demo
+    environment:
+      - VITE_MOCK_MODE=true
+      - VITE_API_BASE_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: bim_demo_network

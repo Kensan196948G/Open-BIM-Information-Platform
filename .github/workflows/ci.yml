@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   backend-lint:
     name: Backend Lint & Type Check
@@ -15,7 +18,7 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -49,14 +52,14 @@ jobs:
       SECRET_KEY: test-secret-key
       ENVIRONMENT: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
       - run: pip install -e ".[dev]"
       - run: pytest --cov=app --cov-report=xml -v
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v5
         if: always()
         with:
           files: backend/coverage.xml
@@ -68,8 +71,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -85,8 +88,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -103,8 +106,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -135,7 +138,7 @@ jobs:
       ENVIRONMENT: test
       CORS_ORIGINS: http://localhost:4173
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -154,7 +157,7 @@ jobs:
             if curl -sf http://localhost:8000/health; then echo "backend up"; break; fi
             sleep 1
           done
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -186,8 +189,13 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Run gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
