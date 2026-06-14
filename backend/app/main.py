@@ -10,7 +10,9 @@ from app.api.v1 import (
     containers,
     naming,
     naming_rules,
+    organizations,
     projects,
+    rbac,
     uploads,
     workflows,
 )
@@ -63,6 +65,8 @@ app.include_router(audit_logs.router, prefix=API_PREFIX)
 app.include_router(naming.router, prefix=API_PREFIX)
 app.include_router(uploads.router, prefix=API_PREFIX)
 app.include_router(workflows.router, prefix=API_PREFIX)
+app.include_router(organizations.router, prefix=API_PREFIX)
+app.include_router(rbac.router, prefix=API_PREFIX)
 
 
 @app.get("/health")

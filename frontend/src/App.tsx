@@ -10,6 +10,7 @@ import UploadPage from "@/pages/UploadPage";
 import ApprovalsPage from "@/pages/ApprovalsPage";
 import RequirementsPage from "@/pages/RequirementsPage";
 import NamingRulesPage from "@/pages/NamingRulesPage";
+import RBACPage from "@/pages/RBACPage";
 import Layout from "@/components/Layout";
 import { Settings } from "lucide-react";
 
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="approvals" element={<ApprovalsPage />} />
         <Route path="requirements" element={<RequirementsPage />} />
         <Route path="audit-logs" element={<AuditLogsPage />} />
+        <Route path="settings/roles" element={<RBACPage />} />
         <Route
           path="settings"
           element={
