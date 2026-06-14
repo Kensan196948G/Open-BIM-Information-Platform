@@ -315,3 +315,136 @@ async def test_transition_wip_to_shared(client: AsyncClient):
     )
     assert res.status_code == 200
     assert res.json()["current_state"] == "Shared"
+
+
+# ─── GET /workflows/{workflow_id} ─────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_success(client: AsyncClient):
+    """Member can fetch workflow by ID after creating it."""
+    token, user_id = await _register_and_login(client, "gwf@example.com", "gwfuser")
+    org_id, project_id = await _setup_org_project()
+    await _add_membership(user_id, org_id)
+    container_id = await _create_container(client, token, project_id)
+
+    wf_res = await client.post(
+        "/api/v1/workflows",
+        json={
+            "project_id": project_id,
+            "target_type": "container",
+            "target_id": container_id,
+            "assignee_ids": [user_id],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert wf_res.status_code == 201
+    workflow_id = wf_res.json()["id"]
+
+    res = await client.get(
+        f"/api/v1/workflows/{workflow_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["id"] == workflow_id
+    assert data["project_id"] == project_id
+    assert data["target_id"] == container_id
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_not_found(client: AsyncClient):
+    """Unknown workflow ID returns 404."""
+    token, _ = await _register_and_login(client, "gwf2@example.com", "gwfuser2")
+    res = await client.get(
+        f"/api/v1/workflows/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_requires_auth(client: AsyncClient):
+    """Unauthenticated GET /workflows/{id} returns 401."""
+    res = await client.get(f"/api/v1/workflows/{uuid.uuid4()}")
+    assert res.status_code == 401
+
+
+# ─── Rejection flow ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_full_approval_flow_reject_reverts_container(client: AsyncClient):
+    """Rejection in approval flow reverts container from Shared back to WIP."""
+    from sqlalchemy import select
+
+    from app.models.workflow import Approval
+    from tests.conftest import TestSessionLocal
+
+    token, user_id = await _register_and_login(client, "rej@example.com", "rejuser")
+    org_id, project_id = await _setup_org_project()
+    await _add_membership(user_id, org_id)
+    container_id = await _create_container(client, token, project_id)
+
+    # Move container to Shared first
+    trans = await client.post(
+        f"/api/v1/projects/{project_id}/containers/{container_id}/transition",
+        json={"action": "submit"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert trans.status_code == 200
+    assert trans.json()["current_state"] == "Shared"
+
+    # Start workflow
+    wf_res = await client.post(
+        "/api/v1/workflows",
+        json={
+            "project_id": project_id,
+            "target_type": "container",
+            "target_id": container_id,
+            "assignee_ids": [user_id],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert wf_res.status_code == 201
+    workflow_id = wf_res.json()["id"]
+
+    async with TestSessionLocal() as session:
+        result = await session.execute(
+            select(Approval).where(Approval.workflow_id == workflow_id)
+        )
+        approval_id = result.scalar_one().id
+
+    # Reject the approval
+    reject_res = await client.post(
+        f"/api/v1/workflows/{workflow_id}/approvals/{approval_id}/act",
+        json={"result": "rejected", "comment": "Needs revision"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert reject_res.status_code == 200
+    assert reject_res.json()["result"] == "rejected"
+
+    # Verify container reverted to WIP
+    cont_res = await client.get(
+        f"/api/v1/projects/{project_id}/containers/{container_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert cont_res.status_code == 200
+    assert cont_res.json()["current_state"] == "WIP"
+
+
+# ─── Start workflow auth ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_start_workflow_requires_auth(client: AsyncClient):
+    """Unauthenticated POST /workflows returns 401."""
+    res = await client.post(
+        "/api/v1/workflows",
+        json={
+            "project_id": str(uuid.uuid4()),
+            "target_type": "container",
+            "target_id": str(uuid.uuid4()),
+        },
+    )
+    assert res.status_code == 401
