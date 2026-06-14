@@ -108,14 +108,6 @@ describe("RBACPage", () => {
     wrap(<RBACPage />);
     await screen.findByText("管理者");
 
-    // Click the chevron on the first role card (管理者)
-    const chevrons = document.querySelectorAll(
-      "button svg.lucide-chevron-down",
-    );
-    // Use aria-based approach — find expand buttons
-    const expandBtns = screen
-      .getAllByRole("button")
-      .filter((b) => b.querySelector("svg"));
     // Find a chevron button near 管理者
     const adminCard = screen.getByText("管理者").closest(".rounded-xl");
     expect(adminCard).toBeTruthy();
@@ -167,6 +159,7 @@ describe("rbacApi.listOrganizations", () => {
     const spy = vi
       .spyOn(rbacApiModule.rbacApi, "listOrganizations")
       .mockResolvedValue([ORG]);
+    spy.mockClear();
     await rbacApiModule.rbacApi.listOrganizations();
     expect(spy).toHaveBeenCalledOnce();
   });
