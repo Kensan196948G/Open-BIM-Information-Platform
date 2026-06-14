@@ -22,7 +22,10 @@ async def override_get_db():
 
 
 @pytest.fixture(autouse=True)
-async def setup_db():
+async def setup_db(request):
+    if request.node.get_closest_marker("no_db"):
+        yield
+        return
     async with engine_test.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield

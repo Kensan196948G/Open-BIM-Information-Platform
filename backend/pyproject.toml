@@ -60,6 +60,9 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--cov=app --cov-report=term-missing"
+markers = [
+    "no_db: skip database setup/teardown (for tests that don't use the DB)",
+]
 
 [tool.coverage.run]
 source = ["app"]
