@@ -104,7 +104,7 @@ async def test_validate_compliant_identifier_default_rule(client: AsyncClient):
     data = res.json()
     assert data["identifier"] == _VALID_ISO
     assert data["is_compliant"] is True
-    assert data["level"] in ("ok", "warning", "error")
+    assert data["level"] == "compliant"
     assert isinstance(data["issues"], list)
 
 
