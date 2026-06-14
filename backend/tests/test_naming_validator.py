@@ -2,7 +2,7 @@ import pytest
 
 pytestmark = pytest.mark.no_db
 
-from app.services.naming_validator import (
+from app.services.naming_validator import (  # noqa: E402
     NamingRule,
     SegmentDefinition,
     ValidationLevel,
