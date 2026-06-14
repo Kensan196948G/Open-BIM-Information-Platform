@@ -2,6 +2,7 @@ import pytest
 
 pytestmark = pytest.mark.no_db
 
+from app.schemas.naming_rule import SegmentDefinitionSchema  # noqa: E402
 from app.services.naming_validator import (  # noqa: E402
     NamingRule,
     SegmentDefinition,
@@ -235,3 +236,24 @@ def test_optional_segment_not_required_missing():
     result = validate_identifier("HELLO", rule)
     # Should not raise; level depends on pattern/length config (none here)
     assert isinstance(result.level, ValidationLevel)
+
+
+# ─── SegmentDefinitionSchema.validate_pattern (naming_rule.py lines 16-25) ───
+
+
+def test_segment_schema_valid_pattern_accepted():
+    """Valid regex pattern is accepted without error."""
+    seg = SegmentDefinitionSchema(key="a", label="A", pattern=r"^[A-Z]+$")
+    assert seg.pattern == r"^[A-Z]+$"
+
+
+def test_segment_schema_none_pattern_accepted():
+    """None pattern passes through without compilation."""
+    seg = SegmentDefinitionSchema(key="a", label="A", pattern=None)
+    assert seg.pattern is None
+
+
+def test_segment_schema_invalid_pattern_raises():
+    """Invalid regex pattern raises ValueError via field_validator."""
+    with pytest.raises(Exception):
+        SegmentDefinitionSchema(key="a", label="A", pattern=r"[unclosed")
