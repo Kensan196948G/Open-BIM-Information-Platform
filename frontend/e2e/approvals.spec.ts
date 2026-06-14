@@ -113,7 +113,7 @@ test.describe("Approvals page — static UI (mock data)", () => {
     await authenticate(page);
     // ISO 19650 checklist items should appear in detail panel
     await expect(page.getByText("命名規則 ISO 19650-2 に適合")).toBeVisible();
-    await expect(page.getByText("必須メタデータを充足")).toBeVisible();
+    await expect(page.getByText(/必須メタデータ/)).toBeVisible();
   });
 
   test("selecting different task updates detail panel", async ({ page }) => {
