@@ -58,7 +58,11 @@ def test_create_access_token_custom_expiry():
     exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
 
     # JWT exp is truncated to whole seconds; allow 2s tolerance
-    assert before + delta - timedelta(seconds=1) <= exp <= after + delta + timedelta(seconds=2)
+    assert (
+        before + delta - timedelta(seconds=1)
+        <= exp
+        <= after + delta + timedelta(seconds=2)
+    )
 
 
 def test_create_refresh_token():
@@ -83,8 +87,12 @@ def test_create_refresh_token_expiry_in_days():
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
     exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
-    expected_min = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS - 1)
-    expected_max = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS + 1)
+    expected_min = datetime.now(UTC) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS - 1
+    )
+    expected_max = datetime.now(UTC) + timedelta(
+        days=settings.REFRESH_TOKEN_EXPIRE_DAYS + 1
+    )
 
     assert expected_min < exp < expected_max
 
@@ -122,7 +130,9 @@ def test_decode_token_expired_raises():
         "exp": datetime.now(UTC) - timedelta(seconds=1),
         "type": "access",
     }
-    expired_token = jwt.encode(expired_payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    expired_token = jwt.encode(
+        expired_payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
 
     with pytest.raises(JWTError):
         decode_token(expired_token)
