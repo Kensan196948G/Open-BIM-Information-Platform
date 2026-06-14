@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = pytest.mark.no_db
+
 from app.services.naming_validator import (
     NamingRule,
     SegmentDefinition,
