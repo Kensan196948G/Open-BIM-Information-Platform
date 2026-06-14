@@ -68,20 +68,10 @@ def s3_env_no_bucket(monkeypatch):
 
 def test_get_s3_client_singleton(monkeypatch):
     """Second call must return the cached client (singleton)."""
-    import boto3 as real_boto3
-
     from app.services import storage
-
-    calls = []
-
-    def fake_client(*args, **kwargs):
-        calls.append(1)
-        return real_boto3.client.__wrapped__(*args, **kwargs) if hasattr(real_boto3.client, "__wrapped__") else object()
 
     # Reset the cached singleton
     monkeypatch.setattr(storage, "_s3_client", None)
-
-    original_client = storage._s3_client
 
     # Call twice; second call should not invoke boto3.client again
     from unittest.mock import MagicMock, patch
@@ -201,7 +191,7 @@ def test_upload_file_sanitizes_dangerous_extension(s3_env):
 
     # The extension should be 'bin' (sanitized) not 'passwd' or path traversal
     assert not key.endswith("passwd")
-    assert not ".." in key
+    assert ".." not in key
 
 
 # ─── generate_presigned_url ───────────────────────────────────────────────────
