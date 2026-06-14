@@ -46,7 +46,7 @@ async function authenticate(page: any) {
   await page.goto("/approvals");
 }
 
-// ─── Mock-mode UI tests (no backend required) ─────────────────────────────────
+// ─── Mock-mode UI tests (real auth, mock page data from designData.ts) ────────
 
 test.describe("Approvals page — static UI (mock data)", () => {
   test("approvals page is accessible without auth token", async ({ page }) => {
@@ -58,31 +58,7 @@ test.describe("Approvals page — static UI (mock data)", () => {
   });
 
   test("authenticated user sees approval task queue", async ({ page }) => {
-    // Inject mock auth token (no real backend needed)
-    await page.goto("/login");
-    await page.evaluate(() => {
-      const mockToken = "mock.jwt.token";
-      localStorage.setItem("access_token", mockToken);
-      localStorage.setItem(
-        "bim-auth",
-        JSON.stringify({
-          state: {
-            token: mockToken,
-            user: {
-              id: "mock-user",
-              email: "mock@example.com",
-              username: "mockuser",
-              full_name: "Mock User",
-              is_active: true,
-              is_platform_admin: false,
-            },
-          },
-          version: 0,
-        }),
-      );
-    });
-
-    await page.goto("/approvals");
+    await authenticate(page);
     // Page heading
     await expect(
       page.getByRole("heading", { name: "承認タスク" }),
@@ -94,30 +70,7 @@ test.describe("Approvals page — static UI (mock data)", () => {
   test("approval detail panel shows task info when task is selected", async ({
     page,
   }) => {
-    await page.goto("/login");
-    await page.evaluate(() => {
-      const mockToken = "mock.jwt.token";
-      localStorage.setItem("access_token", mockToken);
-      localStorage.setItem(
-        "bim-auth",
-        JSON.stringify({
-          state: {
-            token: mockToken,
-            user: {
-              id: "mock-user",
-              email: "mock@example.com",
-              username: "mockuser",
-              full_name: "Mock User",
-              is_active: true,
-              is_platform_admin: false,
-            },
-          },
-          version: 0,
-        }),
-      );
-    });
-
-    await page.goto("/approvals");
+    await authenticate(page);
     // First task is auto-selected — detail panel should be visible
     await expect(
       page.getByRole("button", { name: /承認して公開/ }),
@@ -127,30 +80,7 @@ test.describe("Approvals page — static UI (mock data)", () => {
   });
 
   test("approve action removes task from queue", async ({ page }) => {
-    await page.goto("/login");
-    await page.evaluate(() => {
-      const mockToken = "mock.jwt.token";
-      localStorage.setItem("access_token", mockToken);
-      localStorage.setItem(
-        "bim-auth",
-        JSON.stringify({
-          state: {
-            token: mockToken,
-            user: {
-              id: "mock-user",
-              email: "mock@example.com",
-              username: "mockuser",
-              full_name: "Mock User",
-              is_active: true,
-              is_platform_admin: false,
-            },
-          },
-          version: 0,
-        }),
-      );
-    });
-
-    await page.goto("/approvals");
+    await authenticate(page);
     // Read queue count badge before approval
     const badgeBefore = page.locator(".app-badge.tone-warning").first();
     const countBefore = await badgeBefore.textContent();
@@ -165,29 +95,7 @@ test.describe("Approvals page — static UI (mock data)", () => {
   });
 
   test("reject action removes task from queue", async ({ page }) => {
-    await page.goto("/login");
-    await page.evaluate(() => {
-      localStorage.setItem("access_token", "mock.jwt.token");
-      localStorage.setItem(
-        "bim-auth",
-        JSON.stringify({
-          state: {
-            token: "mock.jwt.token",
-            user: {
-              id: "mock-user",
-              email: "mock@example.com",
-              username: "mockuser",
-              full_name: "Mock User",
-              is_active: true,
-              is_platform_admin: false,
-            },
-          },
-          version: 0,
-        }),
-      );
-    });
-
-    await page.goto("/approvals");
+    await authenticate(page);
     // Click "却下" button
     await page.getByRole("button", { name: /却下/ }).click();
 
@@ -196,86 +104,20 @@ test.describe("Approvals page — static UI (mock data)", () => {
   });
 
   test("return action removes task from queue", async ({ page }) => {
-    await page.goto("/login");
-    await page.evaluate(() => {
-      localStorage.setItem("access_token", "mock.jwt.token");
-      localStorage.setItem(
-        "bim-auth",
-        JSON.stringify({
-          state: {
-            token: "mock.jwt.token",
-            user: {
-              id: "mock-user",
-              email: "mock@example.com",
-              username: "mockuser",
-              full_name: "Mock User",
-              is_active: true,
-              is_platform_admin: false,
-            },
-          },
-          version: 0,
-        }),
-      );
-    });
-
-    await page.goto("/approvals");
+    await authenticate(page);
     await page.getByRole("button", { name: /差戻し/ }).click();
     await expect(page).toHaveURL(/\/approvals/);
   });
 
   test("checklist items are displayed in detail panel", async ({ page }) => {
-    await page.goto("/login");
-    await page.evaluate(() => {
-      localStorage.setItem("access_token", "mock.jwt.token");
-      localStorage.setItem(
-        "bim-auth",
-        JSON.stringify({
-          state: {
-            token: "mock.jwt.token",
-            user: {
-              id: "mock-user",
-              email: "mock@example.com",
-              username: "mockuser",
-              full_name: "Mock User",
-              is_active: true,
-              is_platform_admin: false,
-            },
-          },
-          version: 0,
-        }),
-      );
-    });
-
-    await page.goto("/approvals");
+    await authenticate(page);
     // ISO 19650 checklist items should appear in detail panel
     await expect(page.getByText("命名規則 ISO 19650-2 に適合")).toBeVisible();
     await expect(page.getByText("必須メタデータを充足")).toBeVisible();
   });
 
   test("selecting different task updates detail panel", async ({ page }) => {
-    await page.goto("/login");
-    await page.evaluate(() => {
-      localStorage.setItem("access_token", "mock.jwt.token");
-      localStorage.setItem(
-        "bim-auth",
-        JSON.stringify({
-          state: {
-            token: "mock.jwt.token",
-            user: {
-              id: "mock-user",
-              email: "mock@example.com",
-              username: "mockuser",
-              full_name: "Mock User",
-              is_active: true,
-              is_platform_admin: false,
-            },
-          },
-          version: 0,
-        }),
-      );
-    });
-
-    await page.goto("/approvals");
+    await authenticate(page);
     // First task identifier is auto-shown in detail panel header
     const firstIdentifier = await page.locator(".mono").first().textContent();
 
