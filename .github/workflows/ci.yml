@@ -168,9 +168,28 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+      - name: Resolve Playwright version
+        id: playwright-version
+        working-directory: frontend
+        run: echo "version=$(node -e "console.log(require('@playwright/test/package.json').version)")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
       - name: Install Playwright browsers
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        # Retry to absorb transient CDN/network failures when downloading browser binaries.
+        run: |
+          for attempt in 1 2 3; do
+            if npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "Playwright install attempt ${attempt} failed; retrying in 10s..."
+            sleep 10
+          done
+          echo "Playwright install failed after 3 attempts" >&2
+          exit 1
       - name: Run E2E
         working-directory: frontend
         env:
