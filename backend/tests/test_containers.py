@@ -413,3 +413,184 @@ async def test_list_containers_unauthenticated(client: AsyncClient):
     _, proj_id = await _setup_org_project()
     res = await client.get(f"/api/v1/projects/{proj_id}/containers")
     assert res.status_code == 401
+
+
+# ─── Full CDE lifecycle ───────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_transition_published_to_archived(client: AsyncClient):
+    """Full CDE lifecycle: WIP → Shared → Published → Archived."""
+    token, proj_id, _ = await _setup(client, "21")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+    await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "submit"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "approve"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "archive"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    assert res.json()["current_state"] == "Archived"
+
+
+@pytest.mark.asyncio
+async def test_transition_shared_to_archived(client: AsyncClient):
+    """ISO 19650 allows archiving directly from Shared state."""
+    token, proj_id, _ = await _setup(client, "22")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+    await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "submit"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "archive"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    assert res.json()["current_state"] == "Archived"
+
+
+# ─── Auth guards on remaining endpoints ──────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_container_requires_auth(client: AsyncClient):
+    """GET /{container_id} without auth returns 401."""
+    token, proj_id, _ = await _setup(client, "23")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}",
+    )
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_transition_requires_auth(client: AsyncClient):
+    """POST /{container_id}/transition without auth returns 401."""
+    token, proj_id, _ = await _setup(client, "24")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+    res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "submit"},
+    )
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_update_container_requires_auth(client: AsyncClient):
+    """PATCH /{container_id} without auth returns 401."""
+    token, proj_id, _ = await _setup(client, "25")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+    res = await client.patch(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}",
+        json={"title": "No Auth"},
+    )
+    assert res.status_code == 401
+
+
+# ─── Pagination ───────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_list_containers_pagination(client: AsyncClient):
+    """page/size parameters limit and offset returned items."""
+    token, proj_id, _ = await _setup(client, "26")
+    for i in range(3):
+        await _create_container(
+            client,
+            token,
+            proj_id,
+            identifier=f"PROJ-ORG-ZZ-GF-DR-AR-{i:04d}",
+            title=f"Container {i}",
+        )
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers",
+        params={"page": 1, "size": 2},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 3
+    assert len(data["items"]) == 2
+
+
+# ─── Platform admin paths ─────────────────────────────────────────────────────
+
+
+async def _make_platform_admin(user_id: str) -> None:
+    """Elevate an existing user to platform admin via direct DB write."""
+    from sqlalchemy import update
+
+    from app.models.user import User
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.id == user_id).values(is_platform_admin=True)
+        )
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_can_list_containers_without_membership(
+    client: AsyncClient,
+):
+    """Platform admin can list containers for a project they are not a member of."""
+    _, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(
+        client, "cadmin_list@example.com", "cadminlist"
+    )
+    await _make_platform_admin(user_id)
+
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    assert "items" in res.json()
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_can_get_container_without_membership(
+    client: AsyncClient,
+):
+    """Platform admin can GET a specific container without org membership."""
+    org_id, proj_id = await _setup_org_project()
+    token_member, member_id = await _register_and_login(
+        client, "cadmin_member@example.com", "cadminmember"
+    )
+    await _add_membership(member_id, org_id)
+    container_id = (
+        await _create_container(
+            client, token_member, proj_id, identifier="PROJ-ORG-ZZ-GF-DR-AR-9901"
+        )
+    ).json()["id"]
+
+    _, admin_id = await _register_and_login(
+        client, "cadmin_get@example.com", "cadminget"
+    )
+    await _make_platform_admin(admin_id)
+    res_login = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "cadmin_get@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    admin_token = res_login.json()["access_token"]
+
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert res.status_code == 200
+    assert res.json()["id"] == container_id

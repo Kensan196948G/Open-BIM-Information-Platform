@@ -346,3 +346,125 @@ async def test_update_project_requires_auth(client: AsyncClient):
     project_id = (await _create_project(client, token)).json()["id"]
     res = await client.patch(f"/api/v1/projects/{project_id}", json={"name": "Ghost"})
     assert res.status_code == 401
+
+
+# ─── Platform admin paths ─────────────────────────────────────────────────────
+
+
+async def _make_platform_admin(user_id: str) -> None:
+    """Elevate an existing user to platform admin via direct DB write."""
+    from sqlalchemy import update
+
+    from app.models.user import User
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as session:
+        await session.execute(
+            update(User).where(User.id == user_id).values(is_platform_admin=True)
+        )
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_lists_all_projects(client: AsyncClient):
+    """Platform admin sees projects across all organizations."""
+    # Two independent orgs each with one project
+    token_a, _ = await _setup(client, "pa1a")
+    token_b, _ = await _setup(client, "pa1b")
+    await _create_project(client, token_a, name="Org A Project", code="OA-001")
+    await _create_project(client, token_b, name="Org B Project", code="OB-001")
+
+    # Create a third user who is a platform admin (no org membership)
+    _, admin_id = await _register_and_login(
+        client, "admin_list@example.com", "adminlist"
+    )
+    await _make_platform_admin(admin_id)
+    # Re-login to get fresh token reflecting admin status
+    res = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "admin_list@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    admin_token = res.json()["access_token"]
+
+    resp = await client.get(
+        "/api/v1/projects", headers={"Authorization": f"Bearer {admin_token}"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total"] >= 2
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_can_get_any_project(client: AsyncClient):
+    """Platform admin can GET a project without being a member."""
+    token, _ = await _setup(client, "pa2")
+    project_id = (await _create_project(client, token, code="PA-002")).json()["id"]
+
+    _, admin_id = await _register_and_login(
+        client, "admin_get@example.com", "admingett"
+    )
+    await _make_platform_admin(admin_id)
+    res = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "admin_get@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    admin_token = res.json()["access_token"]
+
+    resp = await client.get(
+        f"/api/v1/projects/{project_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["id"] == project_id
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_create_project_without_org_returns_400(
+    client: AsyncClient,
+):
+    """Platform admin who is not in any org cannot create project (must specify org_id)."""
+    _, admin_id = await _register_and_login(
+        client, "admin_create@example.com", "admincreate"
+    )
+    await _make_platform_admin(admin_id)
+    res = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "admin_create@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    admin_token = res.json()["access_token"]
+
+    resp = await client.post(
+        "/api/v1/projects",
+        json={"name": "Admin Project", "code": "AP-001"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 400
+    assert "organization_id" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_can_patch_any_project(client: AsyncClient):
+    """Platform admin can PATCH a project without being a member of its org."""
+    token, _ = await _setup(client, "pa4")
+    project_id = (await _create_project(client, token, code="PA-004")).json()["id"]
+
+    _, admin_id = await _register_and_login(
+        client, "admin_patch@example.com", "adminpatch"
+    )
+    await _make_platform_admin(admin_id)
+    res = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "admin_patch@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    admin_token = res.json()["access_token"]
+
+    resp = await client.patch(
+        f"/api/v1/projects/{project_id}",
+        json={"name": "Admin Renamed"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Admin Renamed"

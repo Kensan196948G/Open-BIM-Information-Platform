@@ -448,3 +448,29 @@ async def test_start_workflow_requires_auth(client: AsyncClient):
         },
     )
     assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_act_on_approval_requires_auth(client: AsyncClient):
+    """Unauthenticated POST /workflows/{id}/approvals/{id}/act returns 401."""
+    wf_id = str(uuid.uuid4())
+    ap_id = str(uuid.uuid4())
+    res = await client.post(
+        f"/api/v1/workflows/{wf_id}/approvals/{ap_id}/act",
+        json={"action": "approve"},
+    )
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_act_on_approval_not_found(client: AsyncClient):
+    """POST /workflows/{id}/approvals/{id}/act with unknown workflow returns 404."""
+    token, _ = await _register_and_login(client, "wf_act_nf@ex.com", "wf_act_nf")
+    wf_id = str(uuid.uuid4())
+    ap_id = str(uuid.uuid4())
+    res = await client.post(
+        f"/api/v1/workflows/{wf_id}/approvals/{ap_id}/act",
+        json={"result": "approved"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
