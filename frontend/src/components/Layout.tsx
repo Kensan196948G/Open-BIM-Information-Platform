@@ -83,6 +83,12 @@ const navGroups = [
         label: "監査ログ",
       },
       { id: "settings", to: "/settings", icon: Settings, label: "設定" },
+      {
+        id: "rbac",
+        to: "/settings/roles",
+        icon: Settings2,
+        label: "ロール管理",
+      },
     ],
   },
 ];
