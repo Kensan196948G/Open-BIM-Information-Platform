@@ -1,272 +1,259 @@
-# ⚙️ 技術スタック詳細
+# 🔧 技術スタック詳細
 
-> Open BIM 情報基盤の技術構成・設計判断・依存関係を記述した **開発者・エンジニア向け** ドキュメントです。
-> 非エンジニア向けの概要は → [README.md](../README.md) | IT部門向けセットアップは → [IT_SETUP.md](IT_SETUP.md)
+> Open BIM 情報基盤の技術構成・設計判断・依存関係を記述した**エンジニア・開発担当者向け**ドキュメントです。
 
 ---
 
 ## 📋 目次
 
-- [アーキテクチャ全体図](#-アーキテクチャ全体図)
-- [使用技術一覧](#-使用技術一覧)
-- [フロントエンド構成](#-フロントエンド構成)
-- [バックエンド構成](#-バックエンド構成)
-- [データベーススキーマ](#-データベーススキーマ)
-- [API エンドポイント一覧](#-api-エンドポイント一覧)
-- [認証・セキュリティ設計](#-認証セキュリティ設計)
-- [ISO 19650 実装マッピング](#-iso-19650-実装マッピング)
-- [モックモード設計](#-モックモード設計)
-- [CI/CD パイプライン](#-cicd-パイプライン)
-- [開発環境セットアップ](#-開発環境セットアップ)
+- [🏗️ アーキテクチャ全体図](#️-アーキテクチャ全体図)
+- [📦 使用技術一覧](#-使用技術一覧)
+- [🔄 データフロー（CDE 状態遷移）](#-データフローcde-状態遷移)
+- [🔐 認証・セキュリティ設計](#-認証セキュリティ設計)
+- [🗄️ データベーススキーマ概要](#️-データベーススキーマ概要)
+- [📐 ISO 19650 実装マッピング](#-iso-19650-実装マッピング)
+- [⚙️ CI/CD パイプライン](#️-cicd-パイプライン)
+- [🚀 開発環境セットアップ](#-開発環境セットアップ)
+- [🔗 関連リンク](#-関連リンク)
 
 ---
 
 ## 🏗️ アーキテクチャ全体図
 
-### 本番モード（フルスタック）
-
 ```mermaid
 graph TB
-    subgraph Client["🌐 クライアント"]
-        Browser["ブラウザ\nChrome / Edge / Firefox"]
+    subgraph Client["🌐 クライアント層"]
+        Browser["🖥️ Webブラウザ"]
     end
 
-    subgraph FE["🖥️ フロントエンド（:5173）"]
+    subgraph FE["🖥️ フロントエンド層 (Port 5173)"]
         React["⚛️ React 18 + TypeScript"]
-        Vite["⚡ Vite 5"]
-        TQ["🔄 TanStack Query v5"]
+        Vite["⚡ Vite 5 (bundler / Nginx)"]
+        TQ["🔄 TanStack Query v5\n(サーバー状態管理)"]
         Router["🧭 React Router v6"]
-        MockFlag{{"VITE_MOCK_MODE?"}}
+        Lucide["🎨 Lucide React (アイコン)"]
     end
 
-    subgraph BE["⚙️ バックエンド（:8000）"]
-        FastAPI["🐍 FastAPI 0.110+"]
-        Auth["🔐 JWT 認証 / RBAC"]
-        NamingEngine["📛 NamingRuleEngine\nISO 19650 Annex A"]
-        AuditMiddleware["📋 監査ミドルウェア"]
+    subgraph BE["⚙️ バックエンド層 (Port 8000)"]
+        FastAPI["⚡ FastAPI (Python 3.11)"]
+        subgraph Middleware["🔒 ミドルウェア"]
+            Auth["🔑 JWT 認証\npython-jose"]
+            RBAC["👥 RBAC\n権限チェック"]
+            Naming["📐 NamingRuleEngine\nISO 19650 Annex A"]
+        end
+        SQLAlchemy["🗃️ SQLAlchemy 2.0 (ORM)"]
+        Alembic["🔄 Alembic (migration)"]
+        Pydantic["✅ Pydantic v2 (validation)"]
     end
 
     subgraph Data["🗄️ データ層"]
-        PG[("🐘 PostgreSQL 15\n:5432")]
-        Redis[("⚡ Redis 7\n:6379")]
-        MinIO[("📦 MinIO\n:9000")]
+        PG["🐘 PostgreSQL 15\nPort 5432\n(メインDB)"]
+        Redis["⚡ Redis 7\nPort 6379\n(セッション・キャッシュ)"]
+        MinIO["📦 MinIO\nPort 9000\n(S3互換ストレージ)"]
     end
 
-    Browser -->|"HTTP"| React
+    subgraph Audit["📋 監査層"]
+        AuditLogs["📋 audit_logs テーブル\n(Append-Only)"]
+    end
+
+    Browser -->|"HTTPS"| Vite
     React --> TQ
     React --> Router
-    MockFlag -->|"false（本番）"| TQ
-    MockFlag -->|"true（モック）"| MockData["📋 designData.ts\n静的モックデータ"]
     TQ -->|"REST API / JSON"| FastAPI
     FastAPI --> Auth
-    FastAPI --> NamingEngine
-    FastAPI --> AuditMiddleware
-    FastAPI -->|"SQLAlchemy ORM"| PG
-    FastAPI -->|"aioredis"| Redis
-    FastAPI -->|"aioboto3 / S3 API"| MinIO
-
-    style Client fill:#E3F2FD,stroke:#1976D2
-    style FE fill:#F3E5F5,stroke:#7B1FA2
-    style BE fill:#E8F5E9,stroke:#388E3C
-    style Data fill:#FFF8E1,stroke:#F57F17
-```
-
-### デモモード（フロントエンドのみ）
-
-```mermaid
-graph LR
-    Browser["🌐 ブラウザ"] -->|":3000"| Nginx["🖥️ Nginx\n（Vite ビルド済み）"]
-    Nginx --> FE["⚛️ React SPA\nVITE_MOCK_MODE=true"]
-    FE --> DS["📋 designData.ts\n• 10プロジェクト\n• 113情報コンテナ\n• 30承認フロー\n• 55監査ログ\n• 命名規則定義"]
-    DS -.->|"バックエンド不要"| X(["❌ PostgreSQL\n❌ Redis\n❌ MinIO"])
-
-    style DS fill:#E8EAF6,stroke:#3F51B5
-    style X fill:#FFEBEE,stroke:#C62828
+    FastAPI --> RBAC
+    FastAPI --> Naming
+    FastAPI --> SQLAlchemy
+    SQLAlchemy --> PG
+    FastAPI --> Redis
+    FastAPI --> MinIO
+    FastAPI --> AuditLogs
+    AuditLogs --> PG
 ```
 
 ---
 
 ## 📦 使用技術一覧
 
-### フロントエンド
+### 🖥️ フロントエンド
 
-| 技術              | バージョン | 用途                                      |
-| ----------------- | ---------- | ----------------------------------------- |
-| ⚛️ React          | 18         | UI コンポーネントフレームワーク           |
-| 📘 TypeScript     | 5.x        | 型安全開発・コンパイル時エラー検出        |
-| ⚡ Vite           | 5.x        | 高速ビルドツール（HMR 対応）              |
-| 🔄 TanStack Query | v5         | サーバー状態管理・キャッシュ・再フェッチ  |
-| 🧭 React Router   | v6         | クライアントサイドルーティング            |
-| 🎨 Lucide React   | latest     | アイコンライブラリ（SVG）                 |
-| 📡 Axios          | 1.x        | HTTP クライアント（インターセプター対応） |
-| 🎭 Vitest         | v4         | ユニット・コンポーネントテスト            |
-| 🎭 Playwright     | latest     | E2E テスト                                |
+| 技術 | バージョン | 用途 |
+|---|---|---|
+| ⚛️ React | 18 | UI フレームワーク |
+| 📘 TypeScript | 5.x | 型安全な開発 |
+| ⚡ Vite | 5.x | 高速ビルドツール |
+| 🔄 TanStack Query | v5 | サーバー状態管理・キャッシュ |
+| 🧭 React Router | v6 | クライアントサイドルーティング |
+| 🎨 Lucide React | latest | アイコンライブラリ |
+| 📡 Axios | 1.x | HTTP クライアント |
 
-### バックエンド
+### ⚙️ バックエンド
 
-| 技術              | バージョン | 用途                                       |
-| ----------------- | ---------- | ------------------------------------------ |
-| 🐍 Python         | 3.11       | 実行環境                                   |
-| ⚡ FastAPI        | 0.110+     | 非同期 REST API フレームワーク             |
-| 🗃️ SQLAlchemy     | 2.0        | ORM（非同期対応 async session）            |
-| 🔄 Alembic        | latest     | DB スキーママイグレーション                |
-| ✅ Pydantic       | v2         | リクエスト/レスポンスバリデーション        |
-| 🔐 python-jose    | latest     | JWT トークン生成・検証                     |
-| 🔑 passlib        | latest     | パスワードハッシュ（bcrypt）               |
-| 📦 aioboto3       | latest     | MinIO / S3 非同期クライアント              |
-| 🔴 aioredis       | latest     | Redis 非同期クライアント                   |
-| 🧪 pytest         | 7.x+       | テストフレームワーク                       |
-| 🧪 pytest-asyncio | latest     | 非同期テスト対応                           |
-| ⏱️ pytest-timeout | latest     | テストタイムアウト制御                     |
-| 🧪 moto           | latest     | AWS/S3 モックライブラリ                    |
-| 📏 Ruff           | latest     | 静的解析・フォーマット（Black/isort 代替） |
+| 技術 | バージョン | 用途 |
+|---|---|---|
+| 🐍 Python | 3.11 | 実行環境 |
+| ⚡ FastAPI | 0.110+ | REST API フレームワーク |
+| 🗃️ SQLAlchemy | 2.0 | ORM（Object-Relational Mapper） |
+| 🔄 Alembic | latest | DB スキーママイグレーション |
+| ✅ Pydantic | v2 | データバリデーション・シリアライゼーション |
+| 🔐 python-jose | latest | JWT トークン処理 |
+| 🔑 passlib / bcrypt | latest | パスワードハッシュ |
+| 📦 aioboto3 | latest | MinIO/S3 非同期クライアント |
+| 🔌 httpx | latest | 非同期 HTTP クライアント（テスト用） |
 
-### データ・インフラ
+### 🗄️ データ・インフラ
 
-| 技術              | バージョン | 用途                               |
-| ----------------- | ---------- | ---------------------------------- |
-| 🐘 PostgreSQL     | 15         | メインリレーショナル DB            |
-| ⚡ Redis          | 7          | セッション・キャッシュ・レート制限 |
-| 📦 MinIO          | latest     | S3 互換ファイルストレージ          |
-| 🐳 Docker         | 24.0+      | コンテナランタイム                 |
-| 🐳 Docker Compose | v2.20+     | マルチコンテナオーケストレーション |
-| 🔧 Nginx          | latest     | 静的ファイル配信（デモモード）     |
-| ⚙️ systemd        | -          | OS 起動時サービス自動起動          |
+| 技術 | バージョン | 用途 |
+|---|---|---|
+| 🐘 PostgreSQL | 15 | リレーショナル DB（メインデータストア） |
+| ⚡ Redis | 7 | セッション・キャッシュ |
+| 📦 MinIO | latest | S3 互換ファイルストレージ |
+| 🐳 Docker Compose | v2 | コンテナオーケストレーション |
+| 🔧 systemd | — | サービス自動起動管理 |
+| 🌐 Nginx | latest | リバースプロキシ・静的ファイル配信 |
 
----
+### 🧪 テスト・品質
 
-## 🖥️ フロントエンド構成
-
-### コンポーネントツリー
-
-```mermaid
-graph TD
-    App["⚛️ App.tsx\n（ルートコンポーネント）"]
-
-    App --> AuthProvider["🔐 AuthProvider\n（認証コンテキスト）"]
-    App --> QueryProvider["🔄 QueryClientProvider\n（TanStack Query）"]
-    App --> Router["🧭 Router"]
-
-    Router --> Layout["📐 Layout.tsx\n（共通レイアウト）"]
-    Layout --> Sidebar["📌 Sidebar.tsx\n（ナビゲーション）"]
-    Layout --> Pages
-
-    Pages --> Dashboard["📊 Dashboard\n（KPI・進捗）"]
-    Pages --> Projects["📁 Projects\n（プロジェクト一覧）"]
-    Pages --> Containers["📄 Containers\n（情報コンテナ）"]
-    Pages --> Workflows["✅ Workflows\n（承認フロー）"]
-    Pages --> AuditLogs["📋 AuditLogs\n（監査ログ）"]
-    Pages --> NamingRules["📛 NamingRules\n（命名規則設定）"]
-    Pages --> Settings["⚙️ Settings"]
-
-    style App fill:#F3E5F5,stroke:#7B1FA2
-    style Pages fill:#E8F5E9,stroke:#388E3C
-```
-
-### モックモード データフロー
-
-```mermaid
-flowchart LR
-    ENV{{"VITE_MOCK_MODE\n=true?"}}
-
-    ENV -->|"Yes（開発・デモ）"| MockService["📋 mockApiService.ts\n（静的レスポンス）"]
-    ENV -->|"No（本番）"| RealAPI["📡 api.ts\nAxios → FastAPI"]
-
-    MockService --> DesignData["📄 designData.ts\n113コンテナ / 30承認 / 55ログ"]
-    RealAPI --> FastAPI["⚙️ FastAPI :8000"]
-
-    style MockService fill:#E8EAF6,stroke:#3F51B5
-    style RealAPI fill:#E8F5E9,stroke:#388E3C
-```
-
-### 主要ファイル構成
-
-```
-frontend/src/
-├── components/          # 再利用可能UIコンポーネント
-│   ├── ui/              # ボタン・モーダル・テーブル等
-│   └── domain/          # BIM固有コンポーネント
-├── pages/               # ルートごとのページコンポーネント
-├── lib/
-│   ├── designData.ts    # モックデータ定義（全エンティティ）
-│   ├── api.ts           # Axios インスタンス + インターセプター
-│   └── mockApiService.ts # モックAPI実装
-├── hooks/               # カスタムフック（useProjects 等）
-├── types/               # TypeScript 型定義
-└── contexts/            # React Context（Auth 等）
-```
+| 技術 | バージョン | 用途 |
+|---|---|---|
+| 🧪 pytest | 8.x | バックエンドユニット・統合テスト |
+| ⚡ pytest-asyncio | latest | 非同期テストサポート |
+| ⏱️ pytest-timeout | latest | テストハング防止（30秒タイムアウト） |
+| 🧩 moto | latest | AWS/MinIO モック |
+| ⚡ Vitest | v4 | フロントエンドユニットテスト |
+| 🎭 Playwright | latest | E2E（エンドツーエンド）テスト |
+| 🔍 ESLint | latest | フロントエンド静的解析 |
+| 📏 Ruff | latest | Python 静的解析・フォーマット |
 
 ---
 
-## ⚙️ バックエンド構成
+## 🔄 データフロー（CDE 状態遷移）
 
-### レイヤーアーキテクチャ
+ISO 19650 に基づく **CDE（Common Data Environment）** の情報コンテナ状態遷移:
 
 ```mermaid
-graph TB
-    subgraph API["🌐 API Layer（FastAPI）"]
-        Router_["📡 APIRouter\n/api/v1/..."]
-        Middleware["🔍 Middleware\n（Auth / CORS / Audit）"]
-    end
+stateDiagram-v2
+    [*] --> WIP : 📝 コンテナ作成\nPOST /containers
 
-    subgraph Domain["🏛️ ドメイン層"]
-        ContainerSvc["📄 ContainerService"]
-        WorkflowSvc["✅ WorkflowService"]
-        NamingEngine_["📛 NamingRuleEngine\n（ISO 19650 Annex A）"]
-        AuditSvc["📋 AuditService"]
-    end
+    WIP --> Shared : 📤 チームへ提出\nPATCH /containers/{id}/transition\n(action: submit)
 
-    subgraph Infra["🗄️ インフラ層"]
-        Repo["🗃️ Repository\n（SQLAlchemy）"]
-        FileStore["📦 FileStorage\n（MinIO）"]
-        Cache["⚡ CacheService\n（Redis）"]
-    end
+    Shared --> WIP : ↩️ 差し戻し\n(action: reject)
+    Shared --> Published : ✅ 承認・発行\n(action: approve)
 
-    Router_ --> Middleware
-    Middleware --> ContainerSvc
-    Middleware --> WorkflowSvc
-    Middleware --> NamingEngine_
-    ContainerSvc --> AuditSvc
-    WorkflowSvc --> AuditSvc
-    ContainerSvc --> Repo
-    WorkflowSvc --> Repo
-    ContainerSvc --> FileStore
-    Repo --> PG[("🐘 PostgreSQL")]
-    Cache --> Redis_[("⚡ Redis")]
+    Published --> WIP : 🔄 改訂開始\n(action: revise)
+    Published --> Archived : 📁 保管\n(action: archive)
 
-    style API fill:#E8F5E9,stroke:#388E3C
-    style Domain fill:#E3F2FD,stroke:#1976D2
-    style Infra fill:#FFF8E1,stroke:#F57F17
+    Archived --> [*] : 🔒 完全保管\n(変更不可)
+
+    note right of WIP
+        current_state = "WIP"
+        🟡 作業中
+        個人・チームで編集可
+    end note
+
+    note right of Shared
+        current_state = "Shared"
+        🔵 共有・レビュー中
+        承認者が確認
+    end note
+
+    note right of Published
+        current_state = "Published"
+        🟢 承認済み・公式
+        現場・関係者に公開
+    end note
+
+    note right of Archived
+        current_state = "Archived"
+        ⬜ 保管済み
+        改ざん防止・永久保存
+    end note
 ```
 
-### 主要ファイル構成
+### API エンドポイント構成
 
-```
-backend/app/
-├── main.py              # FastAPI アプリ初期化 / ミドルウェア登録
-├── api/v1/              # APIルーター
-│   ├── auth.py          # 認証 (login / refresh / logout)
-│   ├── projects.py      # プロジェクト CRUD
-│   ├── containers.py    # 情報コンテナ CRUD + 状態遷移
-│   ├── workflows.py     # 承認フロー管理
-│   ├── audit_logs.py    # 監査ログ取得
-│   └── naming_rules.py  # 命名規則 CRUD + 検証
-├── models/              # SQLAlchemy ORM モデル
-├── schemas/             # Pydantic スキーマ（Request/Response）
-├── services/            # ビジネスロジック
-│   └── naming_rule_engine.py  # ISO 19650 Annex A 検証
-├── core/
-│   ├── security.py      # JWT / bcrypt
-│   └── config.py        # 環境変数設定
-└── db/
-    └── session.py       # AsyncSession ファクトリ
+```mermaid
+graph LR
+    subgraph Auth["🔑 認証"]
+        A1["POST /auth/register"]
+        A2["POST /auth/login"]
+        A3["GET /auth/me"]
+    end
+
+    subgraph Projects["📁 プロジェクト"]
+        P1["GET /projects"]
+        P2["POST /projects"]
+        P3["GET /projects/{id}"]
+        P4["PATCH /projects/{id}"]
+    end
+
+    subgraph Containers["📦 情報コンテナ"]
+        C1["GET /projects/{id}/containers"]
+        C2["POST /projects/{id}/containers"]
+        C3["GET /projects/{id}/containers/{cid}"]
+        C4["PATCH /projects/{id}/containers/{cid}"]
+        C5["POST /projects/{id}/containers/{cid}/transition"]
+    end
+
+    subgraph Audit["📋 監査"]
+        AU1["GET /audit-logs"]
+    end
+
+    subgraph Naming["📐 命名規則"]
+        N1["GET /naming-rules"]
+        N2["POST /naming-rules/validate"]
+    end
+
+    Auth --> Projects
+    Projects --> Containers
+    Containers --> C5
 ```
 
 ---
 
-## 🗄️ データベーススキーマ
+## 🔐 認証・セキュリティ設計
 
-### ER ダイアグラム
+```mermaid
+sequenceDiagram
+    participant Browser as 🌐 ブラウザ
+    participant API as ⚙️ FastAPI
+    participant DB as 🗄️ PostgreSQL
+    participant Redis as ⚡ Redis
+
+    Browser->>API: POST /auth/login\n(email + password)
+    API->>DB: ユーザー検索
+    DB-->>API: ユーザー情報
+    API->>API: bcrypt パスワード検証
+    API->>Redis: セッション情報キャッシュ
+    API-->>Browser: 🔑 JWT アクセストークン\n(有効期限: 30分)
+
+    Browser->>API: GET /projects\nAuthorization: Bearer <token>
+    API->>API: ① JWT 署名検証\n② RBAC 権限チェック\n③ 組織メンバーシップ確認
+    API->>DB: SELECT（権限フィルタ適用）
+    DB-->>API: データ
+    API-->>Browser: ✅ JSON レスポンス
+
+    Note over API,DB: すべての操作は audit_logs に自動記録
+```
+
+### 🛡️ セキュリティ対策一覧
+
+| 🛡️ 対策 | 実装 | 備考 |
+|---|---|---|
+| 🔑 認証 | JWT (HS256、RS256 対応準備済み) | 30分有効期限 |
+| 🔐 パスワード | bcrypt ハッシュ | コスト係数 12 |
+| 👥 RBAC | ロールベースアクセス制御 | `UserOrganization.role_in_org` |
+| 🔒 プラットフォーム管理者 | `User.is_platform_admin` フラグ | 全組織横断アクセス |
+| 📋 監査証跡 | `audit_logs` テーブル（Append-Only） | J-SOX・ISO 19650 対応 |
+| 🌐 CORS | ホワイトリスト制御 | 許可オリジンのみ |
+| 💉 SQL インジェクション | SQLAlchemy ORM（パラメータバインド） | — |
+| 🔒 XSS | React の自動エスケープ | — |
+| 📁 ファイル検証 | SHA-256 + MIME タイプ検証 | アップロード時 |
+| 🔍 IDOR 防止 | 非メンバーへの 404 返却 | 403 ではなく 404 でリソース存在を隠蔽 |
+
+---
+
+## 🗄️ データベーススキーマ概要
 
 ```mermaid
 erDiagram
@@ -275,428 +262,224 @@ erDiagram
         string name
         string slug
     }
+
     users {
         uuid id PK
-        string email UK
-        string hashed_password
-        string role
+        string email
+        string username
+        bool is_platform_admin
         bool is_active
-        uuid org_id FK
     }
+
+    user_organizations {
+        uuid user_id FK
+        uuid organization_id FK
+        string role_in_org
+    }
+
     projects {
         uuid id PK
-        string identifier UK
+        uuid organization_id FK
         string name
+        string code
         string status
-        uuid org_id FK
-        uuid lead_id FK
+        string applied_standard
     }
+
+    information_containers {
+        uuid id PK
+        uuid project_id FK
+        string identifier
+        string current_state
+        string security_level
+        string title
+    }
+
+    revisions {
+        uuid id PK
+        uuid container_id FK
+        int revision_number
+        string state
+    }
+
     naming_rules {
         uuid id PK
         uuid project_id FK
-        jsonb segments
-        bool is_active
+        string segment_pattern
     }
-    information_containers {
-        uuid id PK
-        string identifier
-        string title
-        string current_state
-        string security_level
-        uuid project_id FK
-        uuid created_by FK
-    }
-    revisions {
-        uuid id PK
-        string revision_code
-        string state_from
-        string state_to
-        timestamp created_at
-        uuid container_id FK
-        uuid author_id FK
-    }
-    files {
-        uuid id PK
-        string filename
-        string mime_type
-        string sha256_hash
-        string storage_path
-        uuid container_id FK
-    }
-    workflow_requests {
-        uuid id PK
-        string stage
-        string status
-        string priority
-        timestamp due_date
-        uuid container_id FK
-        uuid requested_by FK
-    }
+
     audit_logs {
         uuid id PK
-        timestamp occurred_at
-        string event_type
-        string operation
-        string result
-        inet actor_ip
         uuid actor_id FK
         string target_type
-        string target_id
-    }
-    project_members {
-        uuid project_id FK
-        uuid user_id FK
-        string role
+        uuid target_id
+        string operation
+        string result
+        timestamp created_at
     }
 
-    organizations ||--o{ users : "所属"
+    organizations ||--o{ user_organizations : "所属"
+    users ||--o{ user_organizations : "参加"
     organizations ||--o{ projects : "所有"
-    projects ||--o{ naming_rules : "持つ"
     projects ||--o{ information_containers : "含む"
-    projects ||--o{ project_members : "参加"
-    users ||--o{ project_members : "所属"
+    projects ||--o{ naming_rules : "定義"
     information_containers ||--o{ revisions : "版管理"
-    information_containers ||--o{ files : "添付"
-    information_containers ||--o{ workflow_requests : "承認申請"
-    users ||--o{ audit_logs : "操作者"
-    users ||--o{ workflow_requests : "申請者"
+    users ||--o{ audit_logs : "操作記録"
 ```
-
----
-
-## 📡 API エンドポイント一覧
-
-### 主要エンドポイントマップ
-
-```mermaid
-graph LR
-    subgraph Auth["🔐 /auth"]
-        Login["POST /login"]
-        Refresh["POST /refresh"]
-        Logout["POST /logout"]
-        Me["GET /me"]
-    end
-
-    subgraph Proj["📁 /projects"]
-        PList["GET /"]
-        PCreate["POST /"]
-        PGet["GET /{id}"]
-        PUpdate["PUT /{id}"]
-    end
-
-    subgraph Cont["📄 /containers"]
-        CList["GET /"]
-        CCreate["POST /"]
-        CGet["GET /{id}"]
-        CTransit["POST /{id}/transition"]
-        CValidate["POST /{id}/validate-name"]
-        CUpload["POST /{id}/files"]
-    end
-
-    subgraph WF["✅ /workflows"]
-        WList["GET /"]
-        WCreate["POST /"]
-        WApprove["POST /{id}/approve"]
-        WReject["POST /{id}/reject"]
-    end
-
-    subgraph Audit["📋 /audit-logs"]
-        AList["GET /"]
-        AExport["GET /export"]
-    end
-
-    subgraph NR["📛 /naming-rules"]
-        NList["GET /"]
-        NCreate["POST /"]
-        NCheck["POST /validate"]
-    end
-
-    style Auth fill:#FCE4EC,stroke:#C62828
-    style Proj fill:#E8F5E9,stroke:#388E3C
-    style Cont fill:#E3F2FD,stroke:#1976D2
-    style WF fill:#FFF8E1,stroke:#F57F17
-    style Audit fill:#F3E5F5,stroke:#7B1FA2
-    style NR fill:#E0F2F1,stroke:#00796B
-```
-
-### エンドポイント詳細
-
-| エンドポイント                          | メソッド | 認証    | 説明                                  |
-| --------------------------------------- | -------- | ------- | ------------------------------------- |
-| `/api/v1/auth/login`                    | POST     | ❌ 不要 | メール/パスワードでログイン、JWT 返却 |
-| `/api/v1/auth/me`                       | GET      | ✅ JWT  | ログイン中ユーザー情報                |
-| `/api/v1/projects`                      | GET      | ✅ JWT  | プロジェクト一覧（権限フィルタ）      |
-| `/api/v1/projects/{id}`                 | GET      | ✅ JWT  | プロジェクト詳細                      |
-| `/api/v1/containers`                    | GET      | ✅ JWT  | 情報コンテナ一覧                      |
-| `/api/v1/containers/{id}/transition`    | POST     | ✅ JWT  | CDE状態遷移（WIP→Shared等）           |
-| `/api/v1/containers/{id}/validate-name` | POST     | ✅ JWT  | ISO 19650 命名規則検証                |
-| `/api/v1/workflows`                     | GET      | ✅ JWT  | 承認フロー一覧                        |
-| `/api/v1/workflows/{id}/approve`        | POST     | ✅ JWT  | 承認（承認者ロール必須）              |
-| `/api/v1/workflows/{id}/reject`         | POST     | ✅ JWT  | 差し戻し（コメント必須）              |
-| `/api/v1/audit-logs`                    | GET      | ✅ JWT  | 監査ログ一覧（管理者のみ）            |
-| `/api/v1/naming-rules/validate`         | POST     | ✅ JWT  | 命名規則バリデーション単体実行        |
-
----
-
-## 🔐 認証・セキュリティ設計
-
-### 認証フロー（JWT）
-
-```mermaid
-sequenceDiagram
-    participant B as 🌐 ブラウザ
-    participant F as ⚛️ Frontend
-    participant A as ⚙️ FastAPI
-    participant DB as 🐘 PostgreSQL
-    participant R as ⚡ Redis
-
-    B->>F: ログイン画面入力
-    F->>A: POST /auth/login\n{email, password}
-    A->>DB: SELECT users WHERE email=?
-    DB-->>A: ユーザーレコード
-    A->>A: bcrypt.verify(password, hash)
-    A-->>F: {access_token, refresh_token}
-    F->>R: セッション保存（オプション）
-
-    Note over F,A: 以降のリクエスト
-    F->>A: GET /api/v1/projects\nAuthorization: Bearer <token>
-    A->>A: JWT 署名検証\n有効期限チェック
-    A->>DB: SELECT（RBACフィルタ適用）
-    DB-->>A: データ
-    A-->>F: JSON レスポンス
-```
-
-### セキュリティ対策一覧
-
-| カテゴリ                | 対策                   | 実装詳細                                            |
-| ----------------------- | ---------------------- | --------------------------------------------------- |
-| 🔐 認証                 | JWT Bearer トークン    | python-jose / HS256（RS256 対応準備済み）           |
-| 🔑 パスワード           | bcrypt ハッシュ        | passlib[bcrypt] / work factor 12                    |
-| 🛡️ 認可                 | RBAC                   | ロール: admin / manager / reviewer / member         |
-| 📋 監査                 | 全操作記録             | audit_logs テーブル（actor / target / IP / result） |
-| 🌐 CORS                 | ホワイトリスト         | 許可オリジンを環境変数で管理                        |
-| 💉 SQL インジェクション | ORM パラメータバインド | SQLAlchemy 2.0 async                                |
-| 🛡️ XSS                  | 自動エスケープ         | React の JSX エスケープ                             |
-| 📁 ファイル検証         | SHA-256 + MIME         | アップロード時に整合性検証                          |
-| 🔒 機密区分             | 4段階 security_level   | public / limited / confidential / restricted        |
 
 ---
 
 ## 📐 ISO 19650 実装マッピング
 
-### CDE 状態遷移
-
-```mermaid
-stateDiagram-v2
-    [*] --> WIP : コンテナ作成
-
-    WIP --> Shared : チームへ提出\n（transition API）
-    Shared --> WIP : 差し戻し\n（reject）
-    Shared --> Published : 承認完了\n（approve）
-    Published --> WIP : 改訂開始
-    Published --> Archived : プロジェクト完了
-
-    note right of WIP
-        current_state = "WIP"
-        編集可・提出前
-    end note
-    note right of Shared
-        current_state = "Shared"
-        レビュー中
-    end note
-    note right of Published
-        current_state = "Published"
-        正式公開版
-    end note
-    note right of Archived
-        current_state = "Archived"
-        読み取り専用
-    end note
-```
-
-### ISO 19650 要件マッピング表
-
-| ISO 19650 要件       | 実装クラス/テーブル              | 説明                                                   |
-| -------------------- | -------------------------------- | ------------------------------------------------------ |
-| CDE 状態管理         | `containers.current_state`       | WIP/Shared/Published/Archived の4状態                  |
-| 命名規則 Annex A     | `NamingRuleEngine`               | 7セグメント検証（PROJECT-ORG-VOL-LEVEL-TYPE-ROLE-NUM） |
-| 情報セキュリティ区分 | `containers.security_level`      | 4段階（public/limited/confidential/restricted）        |
-| 改訂管理             | `revisions` テーブル             | 全状態変化を履歴として保存                             |
-| 役割と責任           | `rbac_roles` + `project_members` | プロジェクト単位のロール付与                           |
-| 監査証跡             | `audit_logs` テーブル            | actor/target/operation/result/IP を記録                |
-| EIR / BEP 管理       | `projects.metadata` (JSONB)      | 情報要求・BIM実行計画のメタデータ管理                  |
-
-### 命名規則 7セグメント構造（ISO 19650 Annex A）
-
-```
-{PROJECT} - {ORIGINATOR} - {VOLUME} - {LEVEL} - {TYPE} - {ROLE} - {NUMBER}
-    TKO   -     CVL      -   ZZ    -   ZZ    -   DR   -    A   -  0001
-```
-
-| セグメント | 例            | 説明                             |
-| ---------- | ------------- | -------------------------------- |
-| PROJECT    | TKO, HKR, HND | プロジェクト識別子               |
-| ORIGINATOR | CVL, STR, MEP | 担当組織・専門分野               |
-| VOLUME     | ZZ, TN1, BRG  | ボリューム/エリア区分            |
-| LEVEL      | ZZ, B1, RF    | フロア/レベル                    |
-| TYPE       | DR, MD, SP    | 情報タイプ（図面/モデル/仕様書） |
-| ROLE       | A, C, E       | 作成者ロール                     |
-| NUMBER     | 0001〜9999    | 連番                             |
+| 📐 ISO 19650 要件 | 🔧 実装 | 📁 コード位置 |
+|---|---|---|
+| CDE 状態管理 | `containers.current_state` (WIP/Shared/Published/Archived) | `app/models/container.py` |
+| 命名規則 (Annex A) | `NamingRuleEngine` — 7セグメント検証 | `app/services/naming_rule.py` |
+| 情報セキュリティ区分 | `security_level` (public/limited/confidential/restricted) | `app/models/container.py` |
+| 改訂管理 | `revisions` テーブル + 状態履歴 | `app/models/revision.py` |
+| 役割と責任 | `rbac_roles` + `UserOrganization.role_in_org` | `app/models/user.py` |
+| 監査証跡 | `audit_logs` テーブル (actor/target/operation/result) | `app/models/audit_log.py` |
+| 情報管理責任者 | `is_platform_admin` フラグ | `app/models/user.py` |
 
 ---
 
-## 🎭 モックモード設計
-
-### 環境変数切り替え
+## ⚙️ CI/CD パイプライン
 
 ```mermaid
 flowchart TD
-    Start["npm run dev / docker compose up"] --> Check{{"VITE_MOCK_MODE\n環境変数?"}}
-    Check -->|"true"| Mock["📋 mockApiService.ts\n静的JSONレスポンス"]
-    Check -->|"false / 未設定"| Real["📡 api.ts\nAxios → http://localhost:8000"]
+    subgraph Trigger["🚀 トリガー"]
+        Push["git push\n(feature branch)"]
+        PR["Pull Request\n(→ main)"]
+    end
 
-    Mock --> DesignData["📄 designData.ts\n• demoProjects (10件)\n• demoContainers (113件)\n• demoApprovals (30件)\n• demoAuditLogs (55件)\n• demoNamingRule"]
+    subgraph CI["🔄 GitHub Actions CI"]
+        direction TB
+        L["🔍 Lint\nRuff (Python)\nESLint (TypeScript)"]
+        T["🧪 Test\npytest (backend)\nVitest (frontend)"]
+        B["🏗️ Build\nVite build\n(フロントエンド)"]
+        S["🔒 Security Scan\ndependency audit"]
+    end
 
-    Real --> Backend["⚙️ FastAPI バックエンド\n（要起動: docker compose up）"]
+    subgraph Gate["✅ マージゲート"]
+        G1["✅ 全 CI ジョブ成功"]
+        G2["✅ CodeRabbit レビュー"]
+        G3["✅ コードレビュー承認"]
+    end
 
-    style Mock fill:#E8EAF6,stroke:#3F51B5
-    style Real fill:#E8F5E9,stroke:#388E3C
+    subgraph Deploy["🚀 デプロイ（手動）"]
+        D["🏭 本番環境\ndocker compose up -d"]
+    end
+
+    Push --> CI
+    PR --> CI
+    L --> T
+    T --> B
+    B --> S
+    S --> Gate
+    G1 --> G2
+    G2 --> G3
+    G3 -->|"main merge後"| Deploy
 ```
 
-### モックデータ内訳
-
-| データ種別      | 件数                        | ファイル                        |
-| --------------- | --------------------------- | ------------------------------- |
-| 📁 プロジェクト | 10件                        | `designData.ts: demoProjects`   |
-| 📄 情報コンテナ | 113件                       | `designData.ts: demoContainers` |
-| ✅ 承認フロー   | 30件                        | `designData.ts: demoApprovals`  |
-| 📋 監査ログ     | 55件                        | `designData.ts: demoAuditLogs`  |
-| 📛 命名規則     | 1定義（10プロジェクト対応） | `designData.ts: demoNamingRule` |
-
----
-
-## 🔄 CI/CD パイプライン
-
-### GitHub Actions ワークフロー
+### テスト構成
 
 ```mermaid
-flowchart TD
-    Push["📤 git push\n（feature/* または PR）"] --> Trigger["⚡ GitHub Actions 起動"]
+graph LR
+    subgraph Backend["🐍 バックエンドテスト (pytest)"]
+        BT1["🔑 auth テスト\n12テスト"]
+        BT2["📋 audit-logs テスト\n11テスト"]
+        BT3["🔄 workflows テスト\n5テスト"]
+        BT4["📁 projects テスト\n15テスト"]
+        BT5["📦 containers テスト\n~15テスト"]
+        BT6["📐 naming_rules テスト\n~10テスト"]
+    end
 
-    Trigger --> Parallel["並列実行"]
+    subgraph Frontend["⚛️ フロントエンドテスト (Vitest)"]
+        FT1["🧩 コンポーネントテスト"]
+        FT2["🔄 hooks テスト"]
+    end
 
-    Parallel --> LintFE["🔍 Frontend Lint\nESLint + TypeScript check"]
-    Parallel --> LintBE["🔍 Backend Lint\nRuff"]
-    Parallel --> TestBE["🧪 Backend Tests\npytest + moto\n（タイムアウト30s）"]
-    Parallel --> TestFE["🧪 Frontend Tests\nVitest"]
-    Parallel --> Security["🔒 Security Scan\nDependency audit"]
+    subgraph E2E["🎭 E2E テスト (Playwright)"]
+        ET1["🌐 ブラウザ統合テスト"]
+    end
 
-    LintFE --> Build["🏗️ Frontend Build\nvite build"]
-    LintBE --> Build
-    TestBE --> Build
-    TestFE --> Build
-    Security --> Build
+    subgraph DB["🗃️ テスト用DB"]
+        SQLite["SQLite in-memory\n(StaticPool)"]
+    end
 
-    Build --> E2E["🎭 E2E Tests\nPlaywright"]
-    E2E --> Gate{{"✅ 全ジョブ\n通過?"}}
-
-    Gate -->|"Yes"| Ready["🟢 PR Merge 可能"]
-    Gate -->|"No"| Block["🔴 Merge ブロック\n（要修正）"]
-
-    style Push fill:#E3F2FD,stroke:#1976D2
-    style Gate fill:#FFF8E1,stroke:#F57F17
-    style Ready fill:#E8F5E9,stroke:#388E3C
-    style Block fill:#FFEBEE,stroke:#C62828
+    Backend --> SQLite
 ```
-
-### CI ジョブ詳細
-
-| ジョブ            | ツール                         | 対象                       | 所要時間目安 |
-| ----------------- | ------------------------------ | -------------------------- | ------------ |
-| 🔍 Frontend Lint  | ESLint + tsc --noEmit          | `frontend/src/**`          | ~30秒        |
-| 🔍 Backend Lint   | Ruff                           | `backend/app/**`           | ~10秒        |
-| 🧪 Backend Tests  | pytest + moto + pytest-timeout | `backend/tests/**`         | ~60秒        |
-| 🧪 Frontend Tests | Vitest                         | `frontend/src/**/*.test.*` | ~30秒        |
-| 🔒 Security Scan  | npm audit + pip-audit          | 依存パッケージ             | ~20秒        |
-| 🏗️ Build          | vite build                     | `frontend/`                | ~45秒        |
-| 🎭 E2E Tests      | Playwright                     | `e2e/**`                   | ~120秒       |
 
 ---
 
 ## 🚀 開発環境セットアップ
 
-### バックエンド起動
+### バックエンド
 
 ```bash
+# 1. 仮想環境作成
 cd backend
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+python -m venv venv && source venv/bin/activate
+
+# 2. 依存パッケージインストール
 pip install -r requirements.txt
+pip install -r requirements-dev.txt  # テスト依存含む
 
-# PostgreSQL + Redis が必要（Docker Compose 推奨）
-docker compose up postgres redis -d
+# 3. 環境変数設定
+cp .env.example .env
 
-# マイグレーション実行
-alembic upgrade head
-
-# 開発サーバー起動
+# 4. 開発サーバー起動
 uvicorn app.main:app --reload --port 8000
-# → http://localhost:8000/docs  (Swagger UI)
+
+# 5. テスト実行
+pytest backend/tests/ -v --timeout=30
 ```
 
-### フロントエンド起動
+### フロントエンド
 
 ```bash
+# 1. 依存パッケージインストール
 cd frontend
 npm install
 
-# 本番モード（バックエンド接続）
+# 2. 環境変数設定
 cp .env.example .env.local
-# .env.local: VITE_API_BASE_URL=http://localhost:8000
-npm run dev   # → http://localhost:5173
 
-# モックモード（バックエンド不要）
+# 3. 開発サーバー起動（バックエンド連携）
+npm run dev   # http://localhost:5173
+
+# 4. モックモード（バックエンド不要）
 VITE_MOCK_MODE=true npm run dev
+
+# 5. テスト実行
+npm test
 ```
 
-### 全スタック起動（推奨）
+### Docker Compose（フルスタック起動）
 
 ```bash
-# フルスタック
-./scripts/start.sh
+# 全サービス起動
+docker compose up -d
 
-# デモモード（バックエンド不要・即起動）
-./scripts/start.sh demo
-```
+# ログ確認
+docker compose logs -f backend
 
-### テスト実行
-
-```bash
-# バックエンドテスト
-cd backend
-pytest -v --timeout=30
-
-# フロントエンドテスト
-cd frontend
-npm run test
-
-# E2E テスト
-cd e2e
-npx playwright test
+# マイグレーション実行
+docker compose exec backend alembic upgrade head
 ```
 
 ---
 
-## 🔗 関連ドキュメント
+## 🔗 関連リンク
 
-| 対象者                     | ドキュメント                                                                 |
-| -------------------------- | ---------------------------------------------------------------------------- |
-| 👔 非エンジニア・経営者    | [📋 README.md（概要）](../README.md)                                         |
-| 💻 IT 部門・システム管理者 | [📘 IT_SETUP.md（セットアップ）](IT_SETUP.md)                                |
-| 📐 BIM 管理者・技術者      | [📐 BIM_GUIDE.md（ISO 19650 ガイド）](BIM_GUIDE.md)                          |
-| 🌐 API リファレンス        | [Swagger UI](http://localhost:8000/docs)（起動後）                           |
-| 📦 GitHub                  | [リポジトリ](https://github.com/Kensan196948G/Open-BIM-Information-Platform) |
+| ドキュメント | 対象 |
+|---|---|
+| [📖 README（非エンジニア向け）](../README.md) | 現場・経営・監査 |
+| [💻 IT セットアップガイド](IT_SETUP.md) | IT 部門スタッフ |
+| [🏗️ アーキテクチャ設計書](ARCHITECTURE.md) | BIM 管理者・設計担当 |
+| [🌐 API ドキュメント](http://localhost:8000/docs) | 開発者（起動後） |
+| [📦 GitHub リポジトリ](https://github.com/Kensan196948G/Open-BIM-Information-Platform) | 全員 |
 
 ---
 
-_← [README.md（概要）](../README.md) | [📘 IT_SETUP.md（IT セットアップ）](IT_SETUP.md) →_
+*⚙️ 技術的な質問・バグ報告は [GitHub Issues](https://github.com/Kensan196948G/Open-BIM-Information-Platform/issues) へ*

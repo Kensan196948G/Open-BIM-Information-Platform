@@ -182,6 +182,42 @@ def mock_s3(monkeypatch):
         monkeypatch.setattr(services.storage, "_s3_client", None)
 
 
+# ─── Auth guards (no moto needed — rejected before S3) ────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_upload_requires_auth(client: AsyncClient):
+    _, proj_id = await _setup_org_project()
+    res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/fake-cid/upload",
+        files={"file": ("x.pdf", b"data", "application/pdf")},
+    )
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_download_url_requires_auth(client: AsyncClient):
+    _, proj_id = await _setup_org_project()
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/fake-cid/files/{uuid.uuid4()}/download-url",
+    )
+    assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_download_url_not_found(client: AsyncClient):
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "ul_dl@ex.com", "ul_dl")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+    nonexistent_file_id = str(uuid.uuid4())
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files/{nonexistent_file_id}/download-url",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
 @needs_moto
 @pytest.mark.asyncio
 async def test_upload_rejects_html_mime(client: AsyncClient, mock_s3):
