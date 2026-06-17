@@ -15,8 +15,8 @@
     "ci_success_rate": 1,
     "ci_all_jobs_pass": true,
     "ci_jobs": 7,
-    "ci_last_run": "27499831263",
-    "ci_consecutive_success": 8,
+    "ci_last_run": "27687383766",
+    "ci_consecutive_success": 9,
     "test_pass_rate": 1,
     "test_count": 180,
     "backend_test_count": 163,
@@ -37,7 +37,7 @@
     "max_repair": 3,
     "same_error_limit": 2,
     "last_stop_at": "2026-06-14T13:10:00.000Z",
-    "current_session_start_at": "2026-06-17T11:23:51.101Z",
+    "current_session_start_at": "2026-06-17T12:17:00.157Z",
     "last_trigger": "cron",
     "last_cron_session_id": "20260617-202313-Open-BIM-Information-Platform"
   },
@@ -93,7 +93,7 @@
     "cto_decision_at": "2026-05-31",
     "ci_all_green": true,
     "ci_jobs": 7,
-    "ci_last_run": "26714149298",
+    "ci_last_run": "27687383766",
     "stable_achieved": true,
     "stable_consecutive_green": 5,
     "docs_complete": true,
@@ -164,265 +164,8 @@
     "last_dreaming_run": null,
     "dreaming_enabled": false
   },
-  "warnings": [
-    {
-      "at": "2026-05-31T12:38:24.906Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 18 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/alembic/versions/46aeadb1d6d7_initial_schema.py",
-        "backend/app/api/v1/audit_logs.py",
-        "backend/app/api/v1/auth.py",
-        "backend/app/api/v1/containers.py",
-        "backend/app/api/v1/naming.py",
-        "backend/app/api/v1/projects.py",
-        "backend/app/api/v1/uploads.py",
-        "backend/app/api/v1/workflows.py",
-        "backend/app/core/security.py",
-        "backend/app/models/base.py",
-        "backend/app/models/container.py",
-        "backend/app/models/user.py",
-        "backend/app/schemas/upload.py",
-        "backend/app/services/__init__.py",
-        "backend/app/services/naming_validator.py",
-        "backend/app/services/storage.py",
-        "backend/tests/test_naming_validator.py",
-        "backend/tests/test_workflows.py"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-05-31T13:27:25.014Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 5 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/app/api/v1/containers.py",
-        "backend/app/api/v1/workflows.py",
-        "backend/app/schemas/container.py",
-        "backend/tests/test_workflows.py",
-        "frontend/vite.config.ts"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-05-31T13:45:15.850Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 2 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_performance.py",
-        "frontend/vite.config.ts"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-02T23:54:44.504Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 25 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/alembic/versions/b2c3d4e5f6a7_add_project_naming_rules.py",
-        "backend/app/api/v1/containers.py",
-        "backend/app/api/v1/naming.py",
-        "backend/app/api/v1/naming_rules.py",
-        "backend/app/models/naming_rule.py",
-        "backend/app/models/project.py",
-        "backend/app/schemas/naming_rule.py",
-        "backend/tests/test_naming_rules.py",
-        "backend/tests/test_uploads.py",
-        "backend/tests/test_workflows.py",
-        "frontend/src/App.tsx",
-        "frontend/src/components/Layout.tsx",
-        "frontend/src/components/design/Primitives.tsx",
-        "frontend/src/lib/designData.ts",
-        "frontend/src/lib/fmt.ts",
-        "frontend/src/pages/ApprovalsPage.tsx",
-        "frontend/src/pages/AuditLogsPage.tsx",
-        "frontend/src/pages/ContainerDetailPage.tsx",
-        "frontend/src/pages/ContainersPage.tsx",
-        "frontend/src/pages/DashboardPage.tsx",
-        "frontend/src/pages/LoginPage.tsx",
-        "frontend/src/pages/NamingRulesPage.tsx",
-        "frontend/src/pages/ProjectsPage.tsx",
-        "frontend/src/pages/RequirementsPage.tsx",
-        "frontend/src/pages/UploadPage.tsx"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-03T00:44:08.317Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 13 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/alembic/versions/b2c3d4e5f6a7_add_project_naming_rules.py",
-        "backend/app/api/v1/containers.py",
-        "backend/app/api/v1/naming.py",
-        "backend/app/api/v1/naming_rules.py",
-        "backend/app/models/naming_rule.py",
-        "backend/app/models/project.py",
-        "backend/app/schemas/naming_rule.py",
-        "backend/tests/test_naming_rules.py",
-        "backend/tests/test_uploads.py",
-        "backend/tests/test_workflows.py",
-        "frontend/src/App.tsx",
-        "frontend/src/components/Layout.tsx",
-        "frontend/src/pages/NamingRulesPage.tsx"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T04:10:24.382Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 9 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_uploads.py",
-        "frontend/src/App.tsx",
-        "frontend/src/components/Layout.tsx",
-        "frontend/src/lib/api.ts",
-        "frontend/src/lib/designData.ts",
-        "frontend/src/lib/mockRouter.ts",
-        "frontend/src/pages/NamingRulesPage.tsx",
-        "frontend/src/pages/ProjectsPage.tsx",
-        "frontend/src/vite-env.d.ts"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T04:47:00.954Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 7 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/conftest.py",
-        "backend/tests/test_storage_service.py",
-        "frontend/src/lib/api.ts",
-        "frontend/src/lib/designData.ts",
-        "frontend/src/lib/mockRouter.ts",
-        "frontend/src/pages/ProjectsPage.tsx",
-        "frontend/src/vite-env.d.ts"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T05:38:07.507Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 2 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_naming_validator.py",
-        "backend/tests/test_security_core.py"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T06:47:20.655Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 4 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/app/core/deps.py",
-        "backend/tests/conftest.py",
-        "backend/tests/test_containers.py",
-        "backend/tests/test_naming_validator.py"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T07:10:21.656Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 5 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_audit_logs.py",
-        "backend/tests/test_auth.py",
-        "backend/tests/test_naming_validator.py",
-        "backend/tests/test_projects.py",
-        "backend/tests/test_workflows.py"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T08:02:22.495Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 4 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_audit_logs.py",
-        "backend/tests/test_auth.py",
-        "backend/tests/test_naming_validator.py",
-        "backend/tests/test_workflows.py"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T08:24:34.359Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 4 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_audit_logs.py",
-        "backend/tests/test_auth.py",
-        "backend/tests/test_naming_validator.py",
-        "backend/tests/test_workflows.py"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T08:37:49.770Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 4 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_audit_logs.py",
-        "backend/tests/test_auth.py",
-        "backend/tests/test_naming_validator.py",
-        "backend/tests/test_workflows.py"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T10:49:15.297Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 2 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_naming_validator.py",
-        "frontend/src/lib/designData.ts"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T11:10:17.532Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 4 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_auth.py",
-        "backend/tests/test_containers.py",
-        "backend/tests/test_naming_validator.py",
-        "backend/tests/test_workflows.py"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T11:25:01.964Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 8 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_containers.py",
-        "backend/tests/test_naming_validator.py",
-        "backend/tests/test_workflows.py",
-        "frontend/src/App.tsx",
-        "frontend/src/pages/AuditLogsPage.tsx",
-        "frontend/src/pages/ContainersPage.tsx",
-        "frontend/src/pages/ProjectsPage.tsx",
-        "frontend/src/pages/SettingsPage.tsx"
-      ],
-      "truncated": false
-    },
-    {
-      "at": "2026-06-14T12:51:28.420Z",
-      "kind": "tdd_required",
-      "message": "テスト未整備の変更が 4 件あります。/tdd または tdd-guide agent で対応してください。",
-      "files": [
-        "backend/tests/test_containers.py",
-        "backend/tests/test_projects.py",
-        "backend/tests/test_uploads.py",
-        "backend/tests/test_workflows.py"
-      ],
-      "truncated": false
-    }
-  ],
+  "warnings": [],
   "compact": {
-    "last_pre_compact_at": "2026-06-14T13:02:09.609Z"
+    "last_pre_compact_at": "2026-06-17T12:17:00.157Z"
   }
 }

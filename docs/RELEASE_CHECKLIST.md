@@ -9,9 +9,9 @@
 | 項目           | 内容                                                                                                                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | 🏷️ バージョン  | v0.1.0 (Sprint 1 MVP)                                                                                                    |
-| 📅 準備完了日  | 2026-05-31                                                                                                               |
-| 🔢 最終 CI Run | [26714149298](https://github.com/Kensan196948G/Open-BIM-Information-Platform/actions/runs/26714149298) (全7ジョブ green) |
-| 🌿 ブランチ    | main (commit d7e6c0a)                                                                                                    |
+| 📅 準備完了日  | 2026-06-17                                                                                                               |
+| 🔢 最終 CI Run | [27687383766](https://github.com/Kensan196948G/Open-BIM-Information-Platform/actions/runs/27687383766) (全7ジョブ green) |
+| 🌿 ブランチ    | main (commit c09e1ae — PR #26 squash merge)                                                                              |
 | 👤 サインオフ  | **未取得（人間承認待ち）**                                                                                               |
 
 ---
@@ -93,6 +93,6 @@ Sprint 1 の全品質ゲート・セキュリティゲート・ドキュメン�
 CI 全7ジョブ green、STABLE 達成、Critical/High 脆弱性 0。
 `deploy.ready=true` を設定し、**人間サインオフ待ち状態**に到達。
 
-実際の本番デプロイは人間（ユーザー）が手動で実行する（CTO はデプロイを自動実行しない）。
+実障の本番デプロイは人間（ユーザー）が手動で実行する（CTO はデプロイを自動実行しない）。
 
 _判断日: 2026-05-31 / CTO (ClaudeOS v9.0)_
