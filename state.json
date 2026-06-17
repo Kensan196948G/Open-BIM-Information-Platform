@@ -26,6 +26,7 @@
     "npm_vulnerabilities_high": 0,
     "security_critical": 0,
     "blocker_count": 0,
+    "open_issues": 0,
     "stable_achieved": true,
     "stable_n": 5,
     "deploy_ready": true
@@ -36,10 +37,11 @@
     "repair_count": 0,
     "max_repair": 3,
     "same_error_limit": 2,
-    "last_stop_at": "2026-06-14T13:10:00.000Z",
-    "current_session_start_at": "2026-06-17T12:46:20.685Z",
+    "last_stop_at": "2026-06-17T13:00:34.705Z",
+    "current_session_start_at": "2026-06-18T00:00:01.000Z",
     "last_trigger": "cron",
-    "last_cron_session_id": "20260617-202313-Open-BIM-Information-Platform"
+    "last_cron_session_id": "20260618-010001-Open-BIM-Information-Platform",
+    "last_claude_session_id": "86b04c9d-7f8d-48db-ad22-72588dfe9db2"
   },
   "automation": {
     "auto_issue_generation": true,
@@ -63,7 +65,7 @@
     "#security: security.py + deps.py — 13 unit tests, both at 100% coverage (PR #13)",
     "#16: RBAC API (PR #18 — CI success)",
     "#15: Requirements Documents API (PR #17 — merged 2026-06-17, see above)",
-    "#19: RBAC Management UI (PR #21 — CI fix pushed 2026-06-14, awaiting CI rerun)",
+    "#19: RBAC Management UI (PR #21 — merged to main 2026-06-17, issue closed 2026-06-18)",
     "#20: RequirementsPage 実API接続 (PR #22 — merged 2026-06-17)",
     "#15: Requirements Documents API (PR #17 — merged 2026-06-17)",
     "containers-coverage: 6 new tests added (full CDE lifecycle, auth guards, pagination) — PR #14 (2026-06-14)",
@@ -165,9 +167,40 @@
     "last_dreaming_run": null,
     "dreaming_enabled": false
   },
-  "warnings": [],
+  "warnings": [
+    {
+      "at": "2026-06-17T13:00:37.776Z",
+      "kind": "tdd_required",
+      "message": "テスト未整備の変更が 22 件あります。/tdd または tdd-guide agent で対応してください。",
+      "files": [
+        "backend/app/core/deps.py",
+        "backend/tests/conftest.py",
+        "backend/tests/test_audit_logs.py",
+        "backend/tests/test_auth.py",
+        "backend/tests/test_containers.py",
+        "backend/tests/test_naming_rules.py",
+        "backend/tests/test_naming_validator.py",
+        "backend/tests/test_projects.py",
+        "backend/tests/test_security_core.py",
+        "backend/tests/test_storage_service.py",
+        "backend/tests/test_uploads.py",
+        "backend/tests/test_workflows.py",
+        "frontend/src/App.tsx",
+        "frontend/src/lib/api.ts",
+        "frontend/src/lib/designData.ts",
+        "frontend/src/lib/mockRouter.ts",
+        "frontend/src/pages/ApprovalsPage.tsx",
+        "frontend/src/pages/AuditLogsPage.tsx",
+        "frontend/src/pages/ContainersPage.tsx",
+        "frontend/src/pages/ProjectsPage.tsx",
+        "frontend/src/pages/SettingsPage.tsx",
+        "frontend/src/vite-env.d.ts"
+      ],
+      "truncated": false
+    }
+  ],
   "compact": {
-    "last_pre_compact_at": "2026-06-17T12:45:00.564Z",
+    "last_pre_compact_at": "2026-06-17T16:03:01.592Z",
     "all_prs_merged_at": "2026-06-17T12:53:22Z",
     "main_ci_last_success": "27690372666"
   }
