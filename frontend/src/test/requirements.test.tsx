@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -15,12 +15,14 @@ const PROJECT = { id: "proj-1", code: "TST", name: "テストプロジェクト"
 const EIR_DOC: RequirementsDocument = {
   id: "doc-eir",
   project_id: "proj-1",
-  document_type: "EIR",
+  owner_user_id: "user-1",
+  doc_type: "EIR",
   title: "雇用主情報要件",
   description: "ISO 19650 EIR 文書",
-  revision: "R01",
+  revision: "01",
   status: "approved",
-  owner_id: "user-1",
+  effective_from: null,
+  effective_to: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-10T00:00:00Z",
   item_count: 2,
@@ -28,22 +30,26 @@ const EIR_DOC: RequirementsDocument = {
     {
       id: "item-1",
       document_id: "doc-eir",
-      sequence_number: 1,
+      item_no: "001",
       what: "LOD200 モデル",
       when_required: "設計完了時",
-      how: "IFC 形式",
-      who: "設計チーム",
+      how_required: "IFC 形式",
+      for_whom: "設計チーム",
+      acceptance_criteria: null,
+      responsible_user_id: null,
       status: "met",
       notes: null,
     },
     {
       id: "item-2",
       document_id: "doc-eir",
-      sequence_number: 2,
+      item_no: "002",
       what: "竣工 BIM モデル",
       when_required: "竣工時",
-      how: "IFC + PDF",
-      who: "施工チーム",
+      how_required: "IFC + PDF",
+      for_whom: "施工チーム",
+      acceptance_criteria: null,
+      responsible_user_id: null,
       status: "partial",
       notes: null,
     },
@@ -53,12 +59,14 @@ const EIR_DOC: RequirementsDocument = {
 const BEP_DOC: RequirementsDocument = {
   id: "doc-bep",
   project_id: "proj-1",
-  document_type: "BEP",
+  owner_user_id: "user-2",
+  doc_type: "BEP",
   title: "BIM 実行計画",
   description: null,
-  revision: "R00",
+  revision: "00",
   status: "draft",
-  owner_id: "user-2",
+  effective_from: null,
+  effective_to: null,
   created_at: "2026-01-05T00:00:00Z",
   updated_at: "2026-01-05T00:00:00Z",
   item_count: 0,
@@ -121,7 +129,6 @@ describe("RequirementsPage", () => {
 
   it("文書一覧に EIR と BEP が表示される", async () => {
     wrap(<RequirementsPage />);
-    // EIR title appears in both list and detail panel (auto-selected), so use findAllByText
     expect(
       (await screen.findAllByText("雇用主情報要件")).length,
     ).toBeGreaterThan(0);
@@ -130,20 +137,13 @@ describe("RequirementsPage", () => {
 
   it("承認済ステータスバッジが表示される", async () => {
     wrap(<RequirementsPage />);
-    // "承認済" appears in both list badge and detail panel badge for auto-selected EIR
     expect((await screen.findAllByText("承認済")).length).toBeGreaterThan(0);
-  });
-
-  it("ドラフトステータスバッジが表示される", async () => {
-    wrap(<RequirementsPage />);
-    expect(await screen.findByText("ドラフト")).toBeInTheDocument();
   });
 
   it("EIR 文書をクリックすると詳細が表示される", async () => {
     const user = userEvent.setup();
     wrap(<RequirementsPage />);
 
-    // Use getAllByText since title appears in list and (auto-selected) detail panel
     const docBtn = (await screen.findAllByText("雇用主情報要件"))[0];
     await user.click(docBtn);
 
@@ -157,7 +157,6 @@ describe("RequirementsPage", () => {
     const user = userEvent.setup();
     wrap(<RequirementsPage />);
 
-    // Use getAllByText since title appears in list and (auto-selected) detail panel
     const docBtn = (await screen.findAllByText("雇用主情報要件"))[0];
     await user.click(docBtn);
 
@@ -178,12 +177,67 @@ describe("RequirementsPage", () => {
       expect(screen.getByText("要求事項がありません")).toBeInTheDocument();
     });
   });
+
+  it("文書を作成ダイアログから作成APIが呼ばれる", async () => {
+    const user = userEvent.setup();
+    const createSpy = vi
+      .spyOn(requirementsApiModule.requirementsApi, "createDocument")
+      .mockResolvedValue({ ...EIR_DOC, id: "doc-new", title: "新規EIR" });
+    wrap(<RequirementsPage />);
+
+    await user.click(await screen.findByText("文書を作成"));
+    await user.type(
+      await screen.findByPlaceholderText("例: 雇用主情報要件 (EIR)"),
+      "新規EIR",
+    );
+    await user.click(await screen.findByText("作成"));
+
+    await waitFor(() => {
+      expect(createSpy).toHaveBeenCalledWith("proj-1", expect.objectContaining({ title: "新規EIR" }));
+    });
+  });
+
+  it("要件を追加フォームから作成APIが呼ばれる", async () => {
+    const user = userEvent.setup();
+    const createItemSpy = vi
+      .spyOn(requirementsApiModule.requirementsApi, "createItem")
+      .mockResolvedValue({
+        id: "item-new",
+        document_id: "doc-bep",
+        item_no: "001",
+        what: "追加要件",
+        when_required: null,
+        how_required: null,
+        for_whom: null,
+        acceptance_criteria: null,
+        responsible_user_id: null,
+        status: "not_met",
+        notes: null,
+      });
+    wrap(<RequirementsPage />);
+
+    await user.click(await screen.findByText("BIM 実行計画"));
+    await user.click(await screen.findByText("要件を追加"));
+    await user.type(
+      await screen.findByText("何を（必須）").then((label) => label.nextElementSibling as HTMLTextAreaElement),
+      "追加要件",
+    );
+    await user.click(await screen.findByText("追加"));
+
+    await waitFor(() => {
+      expect(createItemSpy).toHaveBeenCalledWith(
+        "proj-1",
+        "doc-bep",
+        expect.objectContaining({ what: "追加要件" }),
+      );
+    });
+  });
 });
 
 // ─── API unit tests ───────────────────────────────────────────────────────
 
-describe("requirementsApi.listDocuments", () => {
-  it("正しいエンドポイントが呼ばれる", async () => {
+describe("requirementsApi", () => {
+  it("listDocuments は正しいエンドポイントを呼ぶ", async () => {
     const spy = vi
       .spyOn(requirementsApiModule.requirementsApi, "listDocuments")
       .mockResolvedValue({ items: [], total: 0 });

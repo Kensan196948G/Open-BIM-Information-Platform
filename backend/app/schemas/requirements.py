@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -16,6 +17,7 @@ DocumentTypeValues = Literal[
 DocumentStatusValues = Literal[
     "draft", "under_review", "approved", "superseded", "withdrawn"
 ]
+ItemStatusValues = Literal["met", "partial", "not_met"]
 
 
 class RequirementItemCreate(BaseModel):
@@ -26,6 +28,20 @@ class RequirementItemCreate(BaseModel):
     for_whom: str | None = None
     acceptance_criteria: str | None = None
     responsible_user_id: str | None = None
+    status: ItemStatusValues = "not_met"
+    notes: str | None = None
+
+
+class RequirementItemUpdate(BaseModel):
+    item_no: str | None = None
+    what: str | None = None
+    when_required: str | None = None
+    how_required: str | None = None
+    for_whom: str | None = None
+    acceptance_criteria: str | None = None
+    responsible_user_id: str | None = None
+    status: ItemStatusValues | None = None
+    notes: str | None = None
 
 
 class RequirementItemResponse(BaseModel):
@@ -40,6 +56,8 @@ class RequirementItemResponse(BaseModel):
     for_whom: str | None
     acceptance_criteria: str | None
     responsible_user_id: str | None
+    status: str
+    notes: str | None
 
 
 class RequirementsDocumentCreate(BaseModel):
@@ -74,6 +92,10 @@ class RequirementsDocumentResponse(BaseModel):
     effective_from: str | None
     effective_to: str | None
     description: str | None
+    created_at: datetime
+    updated_at: datetime
+    item_count: int
+    items: list[RequirementItemResponse]
 
 
 class RequirementsDocumentListResponse(BaseModel):

@@ -27,6 +27,12 @@ class DocumentStatus(str, enum.Enum):
     withdrawn = "withdrawn"
 
 
+class ItemStatus(str, enum.Enum):
+    met = "met"
+    partial = "partial"
+    not_met = "not_met"
+
+
 class RequirementsDocument(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "requirements_documents"
 
@@ -73,5 +79,9 @@ class RequirementItem(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     responsible_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id"), nullable=True
     )
+    status: Mapped[ItemStatus] = mapped_column(
+        Enum(ItemStatus), default=ItemStatus.not_met, nullable=False
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     document: Mapped["RequirementsDocument"] = relationship(back_populates="items")
