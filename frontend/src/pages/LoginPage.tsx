@@ -10,12 +10,25 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [oidcUrl, setOidcUrl] = useState<string | null>(null);
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
 
   useEffect(() => {
     document.documentElement.dataset.theme =
       localStorage.getItem("obim-theme") || "light";
+    api
+      .get<{ enabled: boolean; authorize_url: string | null }>(
+        "/auth/oidc/config",
+      )
+      .then((r) => {
+        if (r.data.enabled && r.data.authorize_url) {
+          setOidcUrl(r.data.authorize_url);
+        }
+      })
+      .catch(() => {
+        // OIDC endpoint unavailable — keep SSO disabled
+      });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -119,14 +132,21 @@ export default function LoginPage() {
           <h2 className="t-h1 text-[22px]">ログイン</h2>
           <p className="t-sec mb-7 mt-1">アカウントにサインインして続行</p>
 
-          <button
-            className="app-btn h-10 w-full"
-            disabled
-            title="SSO連携は準備中です"
-          >
-            <Shield className="h-4 w-4" />
-            SSO / OIDC でサインイン（準備中）
-          </button>
+          {oidcUrl ? (
+            <a href={oidcUrl} className="app-btn h-10 w-full">
+              <Shield className="h-4 w-4" />
+              SSO / OIDC でサインイン
+            </a>
+          ) : (
+            <button
+              className="app-btn h-10 w-full"
+              disabled
+              title="SSO連携は未設定です"
+            >
+              <Shield className="h-4 w-4" />
+              SSO / OIDC でサインイン（未設定）
+            </button>
+          )}
           <div className="my-5 flex items-center gap-3">
             <div className="h-px flex-1" style={{ background: "var(--border)" }} />
             <span className="t-tiny">またはメールアドレス</span>
