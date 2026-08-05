@@ -1,6 +1,7 @@
 # 🔧 技術スタック詳細
 
 > Open BIM 情報基盤の技術構成・設計判断・依存関係を記述した**エンジニア・開発担当者向け**ドキュメントです。
+> ISO 19650 は「準拠支援・設計目標」であり、第三者認証は未取得です。
 
 ---
 
@@ -244,7 +245,7 @@ sequenceDiagram
 | 🔐 パスワード | bcrypt ハッシュ | コスト係数 12 |
 | 👥 RBAC | ロールベースアクセス制御 | `UserOrganization.role_in_org` |
 | 🔒 プラットフォーム管理者 | `User.is_platform_admin` フラグ | 全組織横断アクセス |
-| 📋 監査証跡 | `audit_logs` テーブル（Append-Only） | J-SOX・ISO 19650 対応 |
+| 📋 監査証跡 | `audit_logs` テーブル（Append-Only・DBトリガー） | J-SOX 対応は設計目標・未認証 |
 | 🌐 CORS | ホワイトリスト制御 | 許可オリジンのみ |
 | 💉 SQL インジェクション | SQLAlchemy ORM（パラメータバインド） | — |
 | 🔒 XSS | React の自動エスケープ | — |

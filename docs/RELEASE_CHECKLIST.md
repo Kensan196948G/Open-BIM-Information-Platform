@@ -67,6 +67,9 @@
 | 通知システム                           | 未実装               | Sprint 2               |
 | MinIO 本番容量設計                     | 開発設定             | デプロイ前に要設定     |
 | パフォーマンス負荷試験                 | smoke レベルのみ     | 本番相当環境で実施推奨 |
+| production Compose / TLS               | Phase 0 実装済み     | 証明書・本番URL決定後 |
+| 監査ログ書込・immutable トリガー       | Phase 0 実装済み     | PostgreSQL CI で検証 |
+| バックアップ自動化・復元演習           | 未実装               | Phase 0 残タスク      |
 
 ---
 
