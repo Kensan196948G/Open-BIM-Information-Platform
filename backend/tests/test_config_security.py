@@ -78,7 +78,18 @@ def test_localhost_cors_rejected_in_production() -> None:
 
 
 def test_development_defaults_remain_permissive(monkeypatch) -> None:
-    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    for key in (
+        "ENVIRONMENT",
+        "SECRET_KEY",
+        "DEBUG",
+        "DATABASE_URL",
+        "MINIO_SECRET_KEY",
+        "MINIO_ACCESS_KEY",
+        "CORS_ORIGINS",
+        "AV_ENABLED",
+        "OIDC_ENABLED",
+    ):
+        monkeypatch.delenv(key, raising=False)
     settings = Settings(_env_file=None)
     assert settings.ENVIRONMENT == "development"
     assert settings.SECRET_KEY == "dev-secret-key-change-in-production"
