@@ -5,6 +5,7 @@ from pathlib import PurePosixPath
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 
+from app.core.config import settings
 from app.core.deps import DB, CurrentUser
 from app.models.container import ContainerFile, ContainerState, InformationContainer
 from app.models.project import Project
@@ -12,6 +13,7 @@ from app.models.user import UserOrganization
 from app.schemas.upload import FileUploadResponse
 from app.services import storage as storage_svc
 from app.services.audit import enum_value, record_audit
+from app.services.av_scan import scan_bytes
 
 router = APIRouter(
     prefix="/projects/{project_id}/containers/{container_id}", tags=["uploads"]
@@ -179,6 +181,20 @@ async def upload_file(
 
     # Stream-read with early abort on size limit
     data = await _read_streaming(file)
+
+    if settings.AV_ENABLED:
+        try:
+            scan_result = await scan_bytes(data)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Malware scanner unavailable. Upload is temporarily disabled.",
+            ) from exc
+        if not scan_result.clean:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"File rejected by malware scanner: {scan_result.reason}",
+            )
 
     ext = _sanitize_extension(file.filename or "unnamed")
 

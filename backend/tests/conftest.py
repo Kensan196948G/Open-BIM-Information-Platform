@@ -88,3 +88,31 @@ async def client():
 def db_session():
     """Session factory for direct DB manipulation in tests."""
     return TestSessionLocal
+
+
+@pytest.fixture
+def mock_s3(monkeypatch):
+    """Moto-mocked S3 environment. Skips automatically if moto is unavailable."""
+    try:
+        import boto3
+        import moto
+    except ImportError:
+        pytest.skip("moto[s3] not installed")
+
+    from app import services
+
+    with moto.mock_aws():
+        mock_client = boto3.client(
+            "s3",
+            region_name="us-east-1",
+            aws_access_key_id="testing",
+            aws_secret_access_key="testing",
+        )
+        mock_client.create_bucket(Bucket="bim-containers")
+
+        monkeypatch.setattr(services.storage, "get_s3_client", lambda: mock_client)
+        monkeypatch.setattr(services.storage, "_s3_client", None)
+
+        yield
+
+        monkeypatch.setattr(services.storage, "_s3_client", None)

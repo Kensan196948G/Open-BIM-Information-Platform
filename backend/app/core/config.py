@@ -54,6 +54,22 @@ class Settings(BaseSettings):
     REGISTER_RATE_LIMIT: int = 3
     REGISTER_RATE_WINDOW_SECONDS: int = 3600
 
+    # Malware scanning (ClamAV / clamd)
+    AV_ENABLED: bool = False
+    CLAMD_HOST: str = "clamav"
+    CLAMD_PORT: int = 3310
+    CLAMD_TIMEOUT_SECONDS: int = 30
+
+    # OIDC (Entra ID / HENNGE federation)
+    OIDC_ENABLED: bool = False
+    OIDC_ISSUER: str = ""
+    OIDC_CLIENT_ID: str = ""
+    OIDC_CLIENT_SECRET: str = ""
+    OIDC_REDIRECT_URI: str = ""
+    OIDC_SCOPES: str = "openid profile email"
+    OIDC_JWKS_URI: str = ""
+    OIDC_JIT_ACTIVE: bool = True
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",")]

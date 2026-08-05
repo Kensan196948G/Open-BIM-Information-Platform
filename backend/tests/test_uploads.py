@@ -148,40 +148,6 @@ except ImportError:
 needs_moto = pytest.mark.skipif(not _HAS_MOTO, reason="moto[s3] not installed")
 
 
-@pytest.fixture()
-def mock_s3(monkeypatch):
-    """Moto-mocked S3 environment. Skips automatically if moto is unavailable.
-
-    Patches get_s3_client() to return a mock client without custom endpoint,
-    so moto can intercept all boto3 calls (moto doesn't intercept custom endpoints).
-    """
-    if not _HAS_MOTO:
-        pytest.skip("moto[s3] not installed")
-
-    import boto3
-    import moto
-
-    from app import services
-
-    with moto.mock_aws():
-        # Create a client WITHOUT custom endpoint_url so moto can intercept it
-        mock_client = boto3.client(
-            "s3",
-            region_name="us-east-1",
-            aws_access_key_id="testing",
-            aws_secret_access_key="testing",
-        )
-        mock_client.create_bucket(Bucket="bim-containers")
-
-        # Patch get_s3_client to return our moto-compatible client
-        monkeypatch.setattr(services.storage, "get_s3_client", lambda: mock_client)
-        monkeypatch.setattr(services.storage, "_s3_client", None)
-
-        yield
-
-        monkeypatch.setattr(services.storage, "_s3_client", None)
-
-
 # ─── Auth guards (no moto needed — rejected before S3) ────────────────────────
 
 
