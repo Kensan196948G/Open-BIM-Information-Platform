@@ -283,7 +283,7 @@ flowchart LR
 curl http://localhost:8000/health
 
 # 正常レスポンス例
-# {"status": "ok", "database": "connected", "redis": "connected"}
+# {"status": "ok", "version": "0.1.0", "database": "ok", "redis": "unavailable"}
 ```
 
 ### コンテナ稼働確認

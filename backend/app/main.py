@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text as sa_text
 
 from app.api.v1 import (
     audit_logs,
@@ -72,5 +74,34 @@ app.include_router(requirements.router, prefix=API_PREFIX)
 
 
 @app.get("/health")
-async def health_check() -> dict:
-    return {"status": "ok", "version": settings.APP_VERSION}
+async def health_check() -> JSONResponse:
+    database = "ok"
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(sa_text("SELECT 1"))
+    except Exception:
+        database = "error"
+
+    redis = "unavailable"
+    try:
+        from redis.asyncio import from_url
+
+        redis_client = from_url(settings.REDIS_URL, socket_connect_timeout=1)
+        try:
+            if await redis_client.ping():
+                redis = "ok"
+        finally:
+            await redis_client.aclose()  # type: ignore[attr-defined]
+    except Exception:
+        redis = "unavailable"
+
+    healthy = database == "ok"
+    return JSONResponse(
+        status_code=200 if healthy else 503,
+        content={
+            "status": "ok" if healthy else "degraded",
+            "version": settings.APP_VERSION,
+            "database": database,
+            "redis": redis,
+        },
+    )

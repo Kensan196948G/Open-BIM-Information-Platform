@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-MODE="${1:-full}"  # full | demo
+MODE="${1:-full}"  # full | demo | prod
 
 # ---------------------------------------------------------------------------
 # Detect primary LAN IP (Linux/macOS fallback)
@@ -61,6 +61,23 @@ if [[ "$MODE" == "demo" ]]; then
   echo "  │    sudo ./scripts/install-service.sh   │"
   echo "  └────────────────────────────────────────┘"
   echo ""
+
+# ---------------------------------------------------------------------------
+# PROD mode — production stack (internal network, TLS nginx, no reload)
+# ---------------------------------------------------------------------------
+if [[ "$MODE" == "prod" ]]; then
+  echo "🚀 本番モード起動 (docker-compose.prod.yml)"
+  echo "   ※ .env に強力な SECRET_KEY / POSTGRES_PASSWORD / MINIO_ROOT_PASSWORD が必須"
+  echo "   ※ TLS 証明書は ./certs/fullchain.pem と ./certs/privkey.pem を配置してください"
+  docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+  echo ""
+  echo "✅ Open BIM プラットフォーム（本番）が起動しました"
+  echo "  🌐 WebUI:    https://${LAN_IP}/"
+  echo "  🔧 API:      https://${LAN_IP}/api/v1"
+  echo "  🔍 ヘルス:   https://${LAN_IP}/health"
+  echo ""
+  exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # FULL mode — complete stack (frontend + backend + DB + Redis + MinIO)
