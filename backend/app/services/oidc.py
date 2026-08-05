@@ -47,6 +47,15 @@ def decode_oidc_state(state: str) -> dict:
     return jwt.decode(state, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
 
+def derive_username(email: str) -> str:
+    """Derive a stable, collision-safe username from an email address."""
+    local = email.split("@")[0]
+    if len(local) <= 80:
+        return local or "oidcuser"
+    digest = hashlib.sha256(email.encode()).hexdigest()[:8]
+    return f"{local[:72]}-{digest}"
+
+
 async def get_discovery() -> dict:
     issuer = settings.OIDC_ISSUER.rstrip("/")
     if issuer in _discovery_cache:

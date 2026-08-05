@@ -19,7 +19,7 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -60,7 +60,7 @@ jobs:
       ENVIRONMENT: test
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -79,7 +79,7 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -94,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - uses: actions/setup-node@v5
@@ -113,7 +113,7 @@ jobs:
       - name: Generate SBOM
         run: python3 scripts/sbom.py
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-cyclonedx
           path: SBOM.cyclonedx.json
@@ -197,7 +197,7 @@ jobs:
       REGISTER_RATE_LIMIT: 10000
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -257,7 +257,7 @@ jobs:
         run: npx playwright test
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: frontend/playwright-report/
@@ -274,6 +274,6 @@ jobs:
         with:
           fetch-depth: 0
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

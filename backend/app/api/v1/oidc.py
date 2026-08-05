@@ -16,6 +16,7 @@ from app.models.user import User
 from app.schemas.auth import TokenResponse
 from app.services import oidc as oidc_service
 from app.services.audit import record_audit
+from app.services.oidc import derive_username
 
 router = APIRouter(prefix="/auth/oidc", tags=["oidc"])
 
@@ -85,7 +86,7 @@ async def oidc_callback(
     if user is None:
         user = User(
             email=email,
-            username=email.split("@")[0][:100] or "oidcuser",
+            username=derive_username(email),
             full_name=id_claims.get("name") or email,
             is_active=settings.OIDC_JIT_ACTIVE,
             oidc_sub=sub,
