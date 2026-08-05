@@ -233,3 +233,13 @@ def test_verify_id_token_rejects_wrong_key():
     )
     with pytest.raises(JWTError):
         oidc_service.verify_id_token_with_keys(token, [])
+
+
+@pytest.mark.no_db
+def test_derive_username_short_and_long():
+    assert oidc_service.derive_username("user@example.com") == "user"
+    long_email = "very-long-local-part-" + "x" * 100 + "@example.com"
+    username = oidc_service.derive_username(long_email)
+    assert len(username) <= 100
+    assert "-" in username
+    assert username == oidc_service.derive_username(long_email)

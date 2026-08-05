@@ -142,6 +142,7 @@ flowchart LR
 | 📈 監視・SLO | [SLI/SLO・アラート方針](docs/SLI_SLO.md) |
 | 💾 バックアップ・復元 | [バックアップ/復元ガイド](docs/BACKUP_RESTORE.md) |
 | 🗓️ 定期点検 | [運用台帳](docs/OPS_LEDGER.md)・[定期保守手順](docs/MAINTENANCE.md) |
+| 🚀 本番デプロイ | [本番デプロイ Runbook](docs/PRODUCTION_DEPLOYMENT.md) |
 
 ---
 

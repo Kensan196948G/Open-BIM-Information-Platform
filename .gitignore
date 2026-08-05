@@ -41,6 +41,7 @@ build/
 *.crt
 .env.*
 !.env.example
+!.env.production.example
 certs/
 backups/
 
