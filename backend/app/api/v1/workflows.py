@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from enum import Enum
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -23,6 +23,7 @@ from app.models.workflow import (
     WorkflowStatus,
     WorkflowTask,
 )
+from app.services.audit import enum_value, record_audit
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -146,7 +147,10 @@ async def _validate_assignees(assignee_ids: list[str], org_id: str, db) -> None:
 
 @router.post("", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
 async def start_workflow(
-    body: WorkflowStartRequest, current_user: CurrentUser, db: DB
+    request: Request,
+    body: WorkflowStartRequest,
+    current_user: CurrentUser,
+    db: DB,
 ) -> WorkflowResponse:
     project = await _require_project_member(body.project_id, current_user, db)
     await _validate_target(body.target_type, body.target_id, body.project_id, db)
@@ -185,6 +189,22 @@ async def start_workflow(
         db.add(task)
         db.add(approval)
 
+    record_audit(
+        db,
+        event_type="workflow.started",
+        operation="start",
+        target_type=body.target_type.value,
+        target_id=body.target_id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        after_json={
+            "workflow_type": body.workflow_type,
+            "status": enum_value(workflow.status),
+            "assignees": body.assignee_ids,
+        },
+        result="success",
+        workflow_instance_id=workflow.id,
+    )
     await db.commit()
     await db.refresh(workflow)
     return WorkflowResponse.model_validate(workflow)
@@ -210,6 +230,7 @@ async def get_workflow(
     "/{workflow_id}/approvals/{approval_id}/act", response_model=ApprovalResponse
 )
 async def act_on_approval(
+    request: Request,
     workflow_id: str,
     approval_id: str,
     body: ApprovalActRequest,
@@ -301,6 +322,24 @@ async def act_on_approval(
     elif all_approved:
         workflow.status = WorkflowStatus.completed
 
+    record_audit(
+        db,
+        event_type="workflow.approval_acted",
+        operation="act",
+        target_type=approval.target_type,
+        target_id=approval.target_id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        after_json={
+            "approval_id": approval.id,
+            "approval_stage": approval.approval_stage,
+            "result": enum_value(approval.result) if approval.result else None,
+            "workflow_status": enum_value(workflow.status),
+        },
+        reason=body.comment,
+        result="success",
+        workflow_instance_id=workflow_id,
+    )
     await db.commit()
     await db.refresh(approval)
     return ApprovalResponse.model_validate(approval)

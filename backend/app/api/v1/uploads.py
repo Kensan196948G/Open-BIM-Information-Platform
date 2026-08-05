@@ -2,7 +2,7 @@ import re
 import uuid
 from pathlib import PurePosixPath
 
-from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 
 from app.core.deps import DB, CurrentUser
@@ -11,6 +11,7 @@ from app.models.project import Project
 from app.models.user import UserOrganization
 from app.schemas.upload import FileUploadResponse
 from app.services import storage as storage_svc
+from app.services.audit import enum_value, record_audit
 
 router = APIRouter(
     prefix="/projects/{project_id}/containers/{container_id}", tags=["uploads"]
@@ -35,6 +36,13 @@ ALLOWED_CONTENT_TYPES = {
     "image/bmp",
     "model/ifc",
     "application/x-step",
+    "application/acad",
+    "image/vnd.dwg",
+    "image/x-dwg",
+    "application/dxf",
+    "model/vnd.obj",
+    "model/gltf+json",
+    "model/gltf-binary",
     # IFC and BIM formats
     "application/ifc",
     "application/vnd.ms-excel",
@@ -144,6 +152,7 @@ async def _get_container_or_403(
     "/upload", response_model=FileUploadResponse, status_code=status.HTTP_201_CREATED
 )
 async def upload_file(
+    request: Request,
     project_id: str,
     container_id: str,
     file: UploadFile,
@@ -199,6 +208,23 @@ async def upload_file(
         uploaded_by=current_user.id,
     )
     db.add(container_file)
+    record_audit(
+        db,
+        event_type="file.uploaded",
+        operation="upload",
+        target_type="container",
+        target_id=container_id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        after_json={
+            "file_id": container_file.id,
+            "original_filename": container_file.original_filename,
+            "size_bytes": container_file.file_size_bytes,
+            "sha256": container_file.checksum_sha256,
+            "container_state": enum_value(container.current_state),
+        },
+        result="success",
+    )
     await db.commit()
     await db.refresh(container_file)
 

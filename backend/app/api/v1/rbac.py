@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
 from app.core.deps import DB, CurrentUser
@@ -14,6 +14,7 @@ from app.schemas.rbac import (
     RoleUpdate,
     RoleWithPermissionsResponse,
 )
+from app.services.audit import record_audit
 
 router = APIRouter(tags=["rbac"])
 
@@ -120,6 +121,7 @@ async def list_permissions(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_permission(
+    request: Request,
     body: PermissionCreate,
     current_user: CurrentUser,
     db: DB,
@@ -138,6 +140,18 @@ async def create_permission(
 
     perm = Permission(**body.model_dump())
     db.add(perm)
+    await db.flush()
+    record_audit(
+        db,
+        event_type="rbac.permission_created",
+        operation="create",
+        target_type="permission",
+        target_id=perm.id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        after_json={"code": perm.code, "category": perm.category},
+        result="success",
+    )
     await db.commit()
     await db.refresh(perm)
     return PermissionResponse.model_validate(perm)
@@ -184,6 +198,7 @@ async def list_roles(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_role(
+    request: Request,
     org_id: str,
     body: RoleCreate,
     current_user: CurrentUser,
@@ -192,6 +207,18 @@ async def create_role(
     await _require_org_admin(org_id, current_user, db)
     role = Role(organization_id=org_id, **body.model_dump())
     db.add(role)
+    await db.flush()
+    record_audit(
+        db,
+        event_type="rbac.role_created",
+        operation="create",
+        target_type="role",
+        target_id=role.id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        after_json={"name": role.name, "organization_id": org_id},
+        result="success",
+    )
     await db.commit()
     await db.refresh(role)
     return RoleWithPermissionsResponse(**RoleResponse.model_validate(role).model_dump())
@@ -218,6 +245,7 @@ async def get_role(
 
 @router.patch("/roles/{role_id}", response_model=RoleWithPermissionsResponse)
 async def update_role(
+    request: Request,
     role_id: str,
     body: RoleUpdate,
     current_user: CurrentUser,
@@ -229,8 +257,21 @@ async def update_role(
             status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify system roles"
         )
 
+    before_json = {"name": role.name, "description": role.description}
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(role, field, value)
+    record_audit(
+        db,
+        event_type="rbac.role_updated",
+        operation="update",
+        target_type="role",
+        target_id=role.id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        before_json=before_json,
+        after_json={"name": role.name, "description": role.description},
+        result="success",
+    )
     await db.commit()
     await db.refresh(role)
     return RoleWithPermissionsResponse(**RoleResponse.model_validate(role).model_dump())
@@ -238,6 +279,7 @@ async def update_role(
 
 @router.delete("/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_role(
+    request: Request,
     role_id: str,
     current_user: CurrentUser,
     db: DB,
@@ -248,6 +290,16 @@ async def delete_role(
             status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete system roles"
         )
     await db.delete(role)
+    record_audit(
+        db,
+        event_type="rbac.role_deleted",
+        operation="delete",
+        target_type="role",
+        target_id=role_id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        result="success",
+    )
     await db.commit()
 
 
@@ -260,6 +312,7 @@ async def delete_role(
     status_code=status.HTTP_201_CREATED,
 )
 async def assign_permission_to_role(
+    request: Request,
     role_id: str,
     body: RolePermissionAssign,
     current_user: CurrentUser,
@@ -283,6 +336,17 @@ async def assign_permission_to_role(
     )
     if not existing.scalar_one_or_none():
         db.add(RolePermission(role_id=role_id, permission_id=body.permission_id))
+        record_audit(
+            db,
+            event_type="rbac.permission_assigned",
+            operation="assign",
+            target_type="role",
+            target_id=role_id,
+            actor_id=current_user.id,
+            actor_ip=request.client.host if request.client else None,
+            after_json={"permission_id": body.permission_id},
+            result="success",
+        )
         await db.commit()
 
     return await get_role(role_id, current_user, db)
@@ -293,6 +357,7 @@ async def assign_permission_to_role(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def revoke_permission_from_role(
+    request: Request,
     role_id: str,
     permission_id: str,
     current_user: CurrentUser,
@@ -312,4 +377,15 @@ async def revoke_permission_from_role(
             status_code=status.HTTP_404_NOT_FOUND, detail="Permission not assigned"
         )
     await db.delete(rp)
+    record_audit(
+        db,
+        event_type="rbac.permission_revoked",
+        operation="revoke",
+        target_type="role",
+        target_id=role_id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        after_json={"permission_id": permission_id},
+        result="success",
+    )
     await db.commit()

@@ -14,6 +14,8 @@ class AuditLogResponse(BaseModel):
     operation: str
     result: str
     reason: str | None
+    before_json: dict | None
+    after_json: dict | None
 
 
 class AuditLogListResponse(BaseModel):
