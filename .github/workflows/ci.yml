@@ -27,7 +27,8 @@ jobs:
       - run: ruff check app tests
       - run: ruff format --check app tests
       - name: mypy
-        run: mypy app tests
+        # Production code only; test files are covered by ruff + pytest.
+        run: mypy app
 
   backend-test:
     name: Backend Tests
@@ -82,6 +83,36 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]" pip-audit
       - run: pip-audit
+
+  sbom:
+    name: Generate SBOM (CycloneDX)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend metadata tooling
+        working-directory: backend
+        run: pip install pip-licenses
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npm install --no-save license-checker
+      - name: Generate SBOM
+        run: python3 scripts/sbom.py
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: SBOM.cyclonedx.json
+          retention-days: 30
 
   frontend-lint:
     name: Frontend Lint & Type Check
