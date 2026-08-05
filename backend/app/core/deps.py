@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_token
 from app.db.base import get_db
+from app.models.revoked_token import RevokedToken
 from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -26,11 +27,17 @@ async def get_current_user(
         raise credentials_exception
     try:
         payload = decode_token(credentials.credentials)
-        user_id: str = payload.get("sub")
+        user_id = payload.get("sub")
         if user_id is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
+
+    jti = payload.get("jti")
+    if jti:
+        revoked = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti))
+        if revoked.scalar_one_or_none() is not None:
+            raise credentials_exception
 
     result = await db.execute(
         select(User).where(User.id == user_id, User.is_active.is_(True))

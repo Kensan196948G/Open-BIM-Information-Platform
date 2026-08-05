@@ -181,3 +181,78 @@ async def test_get_me_returns_full_profile(client: AsyncClient):
     assert data["username"] == "meuser"
     assert "id" in data
     assert "full_name" in data
+
+
+# ─── Refresh / logout / rate limiting ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_refresh_rotates_tokens(client: AsyncClient):
+    """Refresh returns a new pair and revokes the presented refresh token."""
+    await _register(client, "refresh@example.com", "refreshuser")
+    login_res = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "refresh@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    old_refresh = login_res.json()["refresh_token"]
+
+    res = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": old_refresh},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["access_token"]
+    assert data["refresh_token"] != old_refresh
+
+    # Rotated token must no longer be accepted.
+    replay = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": old_refresh},
+    )
+    assert replay.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_logout_revokes_access_token(client: AsyncClient):
+    """After logout, the access token is rejected by /me."""
+    await _register(client, "logout@example.com", "logoutuser")
+    token = await _login(client, "logout@example.com")
+
+    logout_res = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert logout_res.status_code == 204
+
+    me_res = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert me_res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_login_rate_limited_after_limit(client: AsyncClient):
+    """Rapid repeated logins from the same IP return 429."""
+    await _register(client, "ratelimit@example.com", "ratelimituser")
+    responses = []
+    for _ in range(6):
+        res = await client.post(
+            "/api/v1/auth/login",
+            data={"username": "ratelimit@example.com", "password": "pass1234"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        responses.append(res.status_code)
+    assert responses.count(429) >= 1
+    assert responses[0] == 200
+
+
+@pytest.mark.asyncio
+async def test_refresh_invalid_token_returns_401(client: AsyncClient):
+    """Garbage refresh token returns 401."""
+    res = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": "not-a-real-token"},
+    )
+    assert res.status_code == 401

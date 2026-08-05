@@ -123,7 +123,20 @@ export default function Layout() {
     localStorage.setItem("obim-theme", theme);
   }, [theme]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const accessToken = localStorage.getItem("access_token");
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (accessToken) {
+      try {
+        await api.post(
+          "/auth/logout",
+          { refresh_token: refreshToken },
+          { headers: { Authorization: `Bearer ${accessToken}` } },
+        );
+      } catch {
+        // best-effort: local session is cleared regardless
+      }
+    }
     logout();
     navigate("/login");
   };

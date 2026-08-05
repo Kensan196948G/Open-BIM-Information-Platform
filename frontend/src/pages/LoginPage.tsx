@@ -22,17 +22,26 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    if (email === "demo@example.com" && password === "pass1234") {
+    // Demo credentials are only accepted in mock/demo mode; never in a real deployment.
+    if (
+      import.meta.env.VITE_MOCK_MODE === "true" &&
+      email === "demo@example.com" &&
+      password === "pass1234"
+    ) {
       const demoToken = "demo-preview-token";
       localStorage.setItem("access_token", demoToken);
-      setAuth(demoToken, {
-        id: "demo-user",
-        email,
-        username: "demouser",
-        full_name: "Demo User",
-        is_active: true,
-        is_platform_admin: true,
-      });
+      setAuth(
+        demoToken,
+        {
+          id: "demo-user",
+          email,
+          username: "demouser",
+          full_name: "Demo User",
+          is_active: true,
+          is_platform_admin: true,
+        },
+        "demo-refresh-token",
+      );
       navigate("/dashboard");
       setLoading(false);
       return;
@@ -41,14 +50,18 @@ export default function LoginPage() {
       const form = new URLSearchParams();
       form.append("username", email);
       form.append("password", password);
-      const tokenRes = await api.post<{ access_token: string }>(
+      const tokenRes = await api.post<{
+        access_token: string;
+        refresh_token: string;
+      }>(
         "/auth/login",
         form,
         { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
       );
       localStorage.setItem("access_token", tokenRes.data.access_token);
+      localStorage.setItem("refresh_token", tokenRes.data.refresh_token);
       const meRes = await api.get<User>("/auth/me");
-      setAuth(tokenRes.data.access_token, meRes.data);
+      setAuth(tokenRes.data.access_token, meRes.data, tokenRes.data.refresh_token);
       navigate("/dashboard");
     } catch {
       setError("メールアドレスまたはパスワードが正しくありません");
@@ -74,7 +87,7 @@ export default function LoginPage() {
         <div className="relative max-w-md">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11.5px] font-semibold">
             <span className="h-1.5 w-1.5 rounded-full bg-[#5fd699]" />
-            ISO 19650-1/2/5 準拠
+            ISO 19650 準拠支援（未認証）
           </div>
           <h1 className="text-[30px] font-semibold leading-snug tracking-normal">
             建設情報を、
@@ -82,7 +95,7 @@ export default function LoginPage() {
             ひとつの信頼できる基盤で。
           </h1>
           <p className="mt-4 text-[13.5px] leading-7 text-white/65">
-            CDE 状態管理・命名規則検証・承認ワークフロー・改ざん防止の監査証跡を統合。
+            CDE 状態管理・命名規則検証・承認ワークフロー・監査証跡を統合。
           </p>
           <div className="mt-8 flex gap-7">
             {[
@@ -106,9 +119,13 @@ export default function LoginPage() {
           <h2 className="t-h1 text-[22px]">ログイン</h2>
           <p className="t-sec mb-7 mt-1">アカウントにサインインして続行</p>
 
-          <button className="app-btn h-10 w-full">
+          <button
+            className="app-btn h-10 w-full"
+            disabled
+            title="SSO連携は準備中です"
+          >
             <Shield className="h-4 w-4" />
-            SSO / OIDC でサインイン
+            SSO / OIDC でサインイン（準備中）
           </button>
           <div className="my-5 flex items-center gap-3">
             <div className="h-px flex-1" style={{ background: "var(--border)" }} />
@@ -142,9 +159,9 @@ export default function LoginPage() {
           </form>
 
           <p className="t-tiny mt-6 text-center leading-6">
-            重要操作には多要素認証 (MFA) が要求されます。
+            現在はパスワード認証です（MFA / SSO は今後対応予定）。
             <br />
-            本システムの操作はすべて監査ログに記録されます。
+            主要な操作は監査ログに記録されます。
           </p>
         </div>
       </div>
