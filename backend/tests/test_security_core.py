@@ -156,8 +156,10 @@ async def test_get_current_user_success():
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = mock_user
 
+    revoked_result = MagicMock()
+    revoked_result.scalar_one_or_none.return_value = None
     mock_db = AsyncMock()
-    mock_db.execute = AsyncMock(return_value=mock_result)
+    mock_db.execute = AsyncMock(side_effect=[revoked_result, mock_result])
 
     mock_credentials = MagicMock()
     mock_credentials.credentials = token
@@ -219,8 +221,10 @@ async def test_get_current_user_not_found_raises():
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
 
+    revoked_result = MagicMock()
+    revoked_result.scalar_one_or_none.return_value = None
     mock_db = AsyncMock()
-    mock_db.execute = AsyncMock(return_value=mock_result)
+    mock_db.execute = AsyncMock(side_effect=[revoked_result, mock_result])
 
     mock_credentials = MagicMock()
     mock_credentials.credentials = token

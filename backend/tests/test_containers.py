@@ -461,6 +461,43 @@ async def test_transition_shared_to_archived(client: AsyncClient):
     assert res.json()["current_state"] == "Archived"
 
 
+@pytest.mark.asyncio
+async def test_transition_published_to_wip_via_revise(client: AsyncClient):
+    """Published container + action=revise → state returns to WIP."""
+    token, proj_id, _ = await _setup(client, "22b")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+    await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "submit"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "approve"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "revise", "comment": "revise after site feedback"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    assert res.json()["current_state"] == "WIP"
+
+
+@pytest.mark.asyncio
+async def test_transition_revise_from_wip_returns_409(client: AsyncClient):
+    """revise is only valid from Published — WIP revise returns 409."""
+    token, proj_id, _ = await _setup(client, "22c")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+    res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
+        json={"action": "revise"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 409
+
+
 # ─── Auth guards on remaining endpoints ──────────────────────────────────────
 
 

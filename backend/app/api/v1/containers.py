@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 
 from app.core.deps import DB, CurrentUser
@@ -20,6 +20,7 @@ from app.schemas.container import (
     ContainerUpdate,
     StateTransitionRequest,
 )
+from app.services.audit import enum_value, record_audit
 from app.services.naming_validator import (
     NamingRule,
     SegmentDefinition,
@@ -34,6 +35,7 @@ VALID_TRANSITIONS: dict[tuple[ContainerState, str], ContainerState] = {
     (ContainerState.wip, "submit"): ContainerState.shared,
     (ContainerState.shared, "approve"): ContainerState.published,
     (ContainerState.shared, "return"): ContainerState.wip,
+    (ContainerState.published, "revise"): ContainerState.wip,
     (ContainerState.published, "archive"): ContainerState.archived,
     (ContainerState.shared, "archive"): ContainerState.archived,
 }
@@ -121,6 +123,7 @@ async def _resolve_naming_rule(project_id: str, db) -> NamingRule:
 
 @router.post("", response_model=ContainerResponse, status_code=status.HTTP_201_CREATED)
 async def create_container(
+    request: Request,
     project_id: str,
     body: ContainerCreate,
     current_user: CurrentUser,
@@ -142,6 +145,23 @@ async def create_container(
         **body.model_dump(),
     )
     db.add(container)
+    await db.flush()
+    record_audit(
+        db,
+        event_type="container.created",
+        operation="create",
+        target_type="container",
+        target_id=container.id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        after_json={
+            "identifier": container.identifier,
+            "title": container.title,
+            "container_type": enum_value(container.container_type),
+            "current_state": enum_value(container.current_state),
+        },
+        result="success",
+    )
     await db.commit()
     await db.refresh(container)
     return ContainerResponse.model_validate(container)
@@ -169,6 +189,7 @@ async def get_container(
 
 @router.post("/{container_id}/transition", response_model=ContainerResponse)
 async def transition_state(
+    request: Request,
     project_id: str,
     container_id: str,
     body: StateTransitionRequest,
@@ -220,6 +241,20 @@ async def transition_state(
     )
     container.current_state = next_state
     db.add(history)
+    record_audit(
+        db,
+        event_type="container.state_changed",
+        operation="transition",
+        target_type="container",
+        target_id=container.id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        before_json={"current_state": history.from_state},
+        after_json={"current_state": history.to_state, "action": body.action},
+        reason=body.comment,
+        result="success",
+        workflow_instance_id=None,
+    )
     await db.commit()
     await db.refresh(container)
     return ContainerResponse.model_validate(container)
@@ -227,6 +262,7 @@ async def transition_state(
 
 @router.patch("/{container_id}", response_model=ContainerResponse)
 async def update_container(
+    request: Request,
     project_id: str,
     container_id: str,
     body: ContainerUpdate,
@@ -250,8 +286,27 @@ async def update_container(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only WIP containers can be updated",
         )
+    before_json = {
+        "title": container.title,
+        "security_level": enum_value(container.security_level),
+    }
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(container, field, value)
+    record_audit(
+        db,
+        event_type="container.updated",
+        operation="update",
+        target_type="container",
+        target_id=container.id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        before_json=before_json,
+        after_json={
+            "title": container.title,
+            "security_level": enum_value(container.security_level),
+        },
+        result="success",
+    )
     await db.commit()
     await db.refresh(container)
     return ContainerResponse.model_validate(container)

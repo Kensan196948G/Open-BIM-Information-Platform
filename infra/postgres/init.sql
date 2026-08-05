@@ -11,9 +11,5 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Note: the trigger binding is applied in the Alembic migration that creates
--- the audit_logs table, so the function is available before tables exist here.
--- The migration will run:
---   CREATE TRIGGER audit_logs_no_modify
---   BEFORE UPDATE OR DELETE ON audit_logs
---   FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_modification();
+-- The trigger binding is applied by Alembic migration
+-- 1f2e3d4c5b6a_add_audit_logs_trigger (alembic upgrade head).

@@ -96,8 +96,8 @@ async def test_audit_logs_non_admin_returns_403(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_audit_logs_admin_empty(client: AsyncClient):
-    """Platform admin can list logs — empty DB returns empty list."""
+async def test_audit_logs_admin_lists_auth_events(client: AsyncClient):
+    """Platform admin can list logs written by register/login."""
     token, user_id = await _register_and_login(client, "admin@example.com", "adminuser")
     await _make_admin(user_id)
     res = await client.get(
@@ -105,8 +105,9 @@ async def test_audit_logs_admin_empty(client: AsyncClient):
     )
     assert res.status_code == 200
     data = res.json()
-    assert data["total"] == 0
-    assert data["items"] == []
+    assert data["total"] >= 2  # user.registered + user.login
+    event_types = {item["event_type"] for item in data["items"]}
+    assert {"user.registered", "user.login"} <= event_types
 
 
 @pytest.mark.asyncio
@@ -122,8 +123,8 @@ async def test_audit_logs_returns_seeded_entry(client: AsyncClient):
     )
     assert res.status_code == 200
     data = res.json()
-    assert data["total"] == 1
-    item = data["items"][0]
+    assert data["total"] >= 3  # register/login + seeded entry
+    item = next(i for i in data["items"] if i["id"] == log_id)
     assert item["id"] == log_id
     assert item["event_type"] == "project.created"
     assert item["actor_id"] == user_id
@@ -228,10 +229,10 @@ async def test_audit_logs_pagination(client: AsyncClient):
     )
     await _make_admin(user_id)
     for _ in range(5):
-        await _seed_log()
+        await _seed_log(event_type="seed.event")
     res = await client.get(
         "/api/v1/audit-logs",
-        params={"page": 1, "size": 3},
+        params={"page": 1, "size": 3, "event_type": "seed.event"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 200
@@ -250,10 +251,10 @@ async def test_audit_logs_pagination_page2(client: AsyncClient):
     )
     await _make_admin(user_id)
     for _ in range(4):
-        await _seed_log()
+        await _seed_log(event_type="seed.event")
     res = await client.get(
         "/api/v1/audit-logs",
-        params={"page": 2, "size": 3},
+        params={"page": 2, "size": 3, "event_type": "seed.event"},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 200
@@ -272,11 +273,11 @@ async def test_audit_logs_null_actor(client: AsyncClient):
         client, "admin9@example.com", "adminuser9"
     )
     await _make_admin(user_id)
-    await _seed_log(actor_id=None)
+    log_id = await _seed_log(actor_id=None)
     res = await client.get(
         "/api/v1/audit-logs", headers={"Authorization": f"Bearer {token}"}
     )
     assert res.status_code == 200
     data = res.json()
-    assert data["total"] == 1
-    assert data["items"][0]["actor_id"] is None
+    item = next(i for i in data["items"] if i["id"] == log_id)
+    assert item["actor_id"] is None

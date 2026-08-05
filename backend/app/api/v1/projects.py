@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 
 from app.core.deps import DB, CurrentUser
@@ -10,6 +10,7 @@ from app.schemas.project import (
     ProjectResponse,
     ProjectUpdate,
 )
+from app.services.audit import enum_value, record_audit
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -73,6 +74,7 @@ async def list_projects(
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(
+    request: Request,
     body: ProjectCreate,
     current_user: CurrentUser,
     db: DB,
@@ -98,6 +100,22 @@ async def create_project(
 
     project = Project(organization_id=org_id, **body.model_dump())
     db.add(project)
+    await db.flush()
+    record_audit(
+        db,
+        event_type="project.created",
+        operation="create",
+        target_type="project",
+        target_id=project.id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        after_json={
+            "name": project.name,
+            "code": project.code,
+            "status": enum_value(project.status),
+        },
+        result="success",
+    )
     await db.commit()
     await db.refresh(project)
     return ProjectResponse.model_validate(project)
@@ -113,14 +131,34 @@ async def get_project(
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
 async def update_project(
+    request: Request,
     project_id: str,
     body: ProjectUpdate,
     current_user: CurrentUser,
     db: DB,
 ) -> ProjectResponse:
     project = await _require_project_membership(project_id, current_user, db)
+    before_json = {
+        "name": project.name,
+        "status": enum_value(project.status),
+    }
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(project, field, value)
+    record_audit(
+        db,
+        event_type="project.updated",
+        operation="update",
+        target_type="project",
+        target_id=project.id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        before_json=before_json,
+        after_json={
+            "name": project.name,
+            "status": enum_value(project.status),
+        },
+        result="success",
+    )
     await db.commit()
     await db.refresh(project)
     return ProjectResponse.model_validate(project)

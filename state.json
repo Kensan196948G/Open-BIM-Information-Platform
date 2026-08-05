@@ -8,20 +8,20 @@
   },
   "goal": "ISO 19650準拠のBIM情報基盤WebシステムをRelease Ready状態へ到達させる。全テスト通過・CI成功・blocker=0",
   "goal_type": "production-release",
-  "phase": "Verify",
+  "phase": "Release",
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
     "ci_success_rate": 1,
     "ci_all_jobs_pass": true,
-    "ci_jobs": 7,
+    "ci_jobs": 8,
     "ci_last_run": "27690372666",
     "ci_consecutive_success": 11,
     "test_pass_rate": 1,
-    "test_count": 180,
-    "backend_test_count": 163,
-    "frontend_test_count": 8,
-    "e2e_test_count": 9,
+    "test_count": 292,
+    "backend_test_count": 245,
+    "frontend_test_count": 26,
+    "e2e_test_count": 21,
     "lint_errors": 0,
     "npm_vulnerabilities_high": 0,
     "security_critical": 0,
@@ -52,7 +52,7 @@
     "frontend": "React 18 + TypeScript + Vite",
     "database": "PostgreSQL 15",
     "orm": "SQLAlchemy 2.x + Alembic",
-    "auth": "JWT + OIDC",
+    "auth": "JWT（OIDC は未実装・準備中）",
     "storage": "MinIO (S3-compatible)",
     "cache": "Redis",
     "infra": "Docker Compose"
@@ -72,6 +72,18 @@
     "#naming-rules-platform-admin: 3 platform admin bypass tests for GET/PUT/DELETE naming-rules API"
   ],
   "blocked_issues": [],
+  "production_gate": {
+    "status": "blocked_pending_environment",
+    "blocker": "本番環境が未確定: ドメイン/DNSレコードなし、Cloudflare Pages・Neonプロジェクトなし、GitHub Actions Secrets/Environmentsなし、デプロイワークフローなし、本番ホスト未指定",
+    "required_to_unblock": [
+      "本番ドメイン（例: open-bim.mirai-dx-platform.com）とDNS・TLS証明書",
+      "本番ホスト（VM/オンプレ）またはクラウド実行環境とSSH/デプロイ経路",
+      "GitHub Actions Secrets（本番用SECRET_KEY・DB/MinIO資格情報・通知先）",
+      "バックアップ保存先と復元演習の本番実績",
+      "監視・通知基盤と一次対応担当者の指名"
+    ],
+    "resolved_at": null
+  },
   "security_review": {
     "coderabbit": "credits_exhausted",
     "codex_adversarial": "timeout_fallback_to_subagent",
@@ -91,8 +103,8 @@
     "ci_consecutive_green": 3
   },
   "release_readiness": {
-    "status": "release_ready_pending_human_signoff",
-    "cto_decision": "Release Ready",
+    "status": "phase0_hardening_in_progress",
+    "cto_decision": "Release Ready（技術的PoC）",
     "cto_decision_at": "2026-05-31",
     "ci_all_green": true,
     "ci_jobs": 7,
@@ -103,17 +115,20 @@
     "e2e_live_backend": true,
     "performance_baseline": true,
     "remaining_for_production": [
-      "Human sign-off (mandatory for production deploy — CTO cannot self-approve)"
+      "Human sign-off (mandatory for production deploy — CTO cannot self-approve)",
+      "Phase 0: production起動ガード / Compose内部network化 / TLS / 監査ログ書込+トリガー / PostgreSQL試験 / バックアップ自動化+復元演習 / ライセンス / 主張是正",
+      "Phase 1: SSO/MFA / 協力会社 / 通知 / 検索 / 監視 / 限定パイロット"
     ]
   },
   "deploy": {
-    "ready": true,
-    "ready_at": "2026-05-31",
+    "ready": false,
+    "ready_at": null,
     "version": "v0.1.0",
     "checklist": "docs/RELEASE_CHECKLIST.md",
     "runbook": "docs/OPERATIONS.md",
     "executor": "human (manual deploy required; CTO does not auto-deploy)",
-    "signoff": "pending"
+    "signoff": "pending",
+    "phase0_gate": "一部完了（AV/バックアップ/SSO PoC実装済み・本番IdP接続と復元実績は未）"
   },
   "learning": {
     "failure_patterns": [

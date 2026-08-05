@@ -89,6 +89,10 @@ async def test_create_requirements_document(client: AsyncClient):
     assert data["status"] == "draft"
     assert data["project_id"] == project_id
     assert data["owner_user_id"] == user_id
+    assert data["item_count"] == 0
+    assert data["items"] == []
+    assert "created_at" in data
+    assert "updated_at" in data
 
 
 @pytest.mark.asyncio
@@ -282,6 +286,7 @@ async def test_create_and_list_requirement_items(client: AsyncClient):
     )
     assert item1.status_code == 201
     assert item1.json()["item_no"] == "EIR-001"
+    assert item1.json()["status"] == "not_met"
 
     item2 = await client.post(
         f"/api/v1/projects/{project_id}/requirements/{doc_id}/items",
@@ -301,6 +306,62 @@ async def test_create_and_list_requirement_items(client: AsyncClient):
     )
     assert list_res.status_code == 200
     assert len(list_res.json()) == 2
+
+    doc_res2 = await client.get(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}",
+        headers=headers,
+    )
+    assert doc_res2.json()["item_count"] == 2
+    assert len(doc_res2.json()["items"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_update_and_delete_requirement_item(client: AsyncClient):
+    """PATCH updates item fields; DELETE removes it."""
+    token, user_id = await _register_login(client, "rq10@example.com", "rquser10")
+    org_id, project_id = await _setup_org_project()
+    await _add_membership(user_id, org_id)
+
+    headers = {"Authorization": f"Bearer {token}"}
+    doc_res = await client.post(
+        f"/api/v1/projects/{project_id}/requirements",
+        json={"doc_type": "BEP", "title": "BEP"},
+        headers=headers,
+    )
+    doc_id = doc_res.json()["id"]
+    item_res = await client.post(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}/items",
+        json={"item_no": "BEP-001", "what": "Initial requirement"},
+        headers=headers,
+    )
+    item_id = item_res.json()["id"]
+
+    upd = await client.patch(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}/items/{item_id}",
+        json={
+            "what": "Updated requirement",
+            "status": "partial",
+            "notes": "waiting on client input",
+        },
+        headers=headers,
+    )
+    assert upd.status_code == 200
+    assert upd.json()["what"] == "Updated requirement"
+    assert upd.json()["status"] == "partial"
+    assert upd.json()["notes"] == "waiting on client input"
+
+    del_res = await client.delete(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}/items/{item_id}",
+        headers=headers,
+    )
+    assert del_res.status_code == 204
+
+    get_res = await client.get(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}/items",
+        headers=headers,
+    )
+    assert get_res.status_code == 200
+    assert get_res.json() == []
 
 
 @pytest.mark.asyncio

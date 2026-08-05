@@ -1,6 +1,7 @@
 # 🛠️ 運用手順書 — Open BIM 情報基盤
 
-> ISO 19650 準拠 BIM 情報管理プラットフォームの運用・デプロイ・障害対応手順
+> ISO 19650 準拠支援 BIM 情報管理プラットフォームの運用・デプロイ・障害対応手順
+> （第三者による適合性評価・認証は未取得）
 
 ---
 
@@ -52,18 +53,19 @@ vi .env
 #   - CORS_ORIGINS: 本番フロントエンドURL
 #   - ENVIRONMENT: production
 
-# 3. イメージビルド
-docker compose build
+# 3. イメージビルド（本番は production Compose を使用）
+docker compose -f docker-compose.prod.yml build
 
 # 4. DB マイグレーション（バックエンド起動前）
-docker compose up -d postgres redis minio
-docker compose run --rm backend alembic upgrade head
+docker compose -f docker-compose.prod.yml up -d postgres redis minio
+docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
 
-# 5. 監査ログ immutable トリガー適用（初回のみ）
-docker compose exec postgres psql -U bim_user -d bim_platform -f /docker-entrypoint-initdb.d/init.sql
+# 5. 監査ログ immutable トリガーは alembic upgrade head で適用される
+#    （初回のみ init.sql で関数定義も適用）
+docker compose -f docker-compose.prod.yml exec postgres psql -U bim_user -d bim_platform -f /docker-entrypoint-initdb.d/init.sql
 
 # 6. 全サービス起動
-docker compose up -d
+docker compose -f docker-compose.prod.yml up -d
 
 # 7. ヘルスチェック確認
 curl -f http://localhost:8000/health
@@ -203,6 +205,12 @@ mc mirror local/bim-containers /backup/minio/$(date +%Y%m%d)/
 - **監査ログ監視**: 認証失敗・権限変更イベントを定期レビュー
 - **依存更新**: 月次で `npm audit` / `pip-audit` 実行、Critical/High は即対応
 - **バックアップ暗号化**: バックアップファイルは暗号化保存
+- **マルウェア対策**: 本番ComposeのClamAVでアップロードをスキャン。EICAR検証は
+  `./scripts/av-eicar-test.sh`（詳細は `docs/ADR/ADR-003-malware-scanning.md`）
+- **SSO/MFA**: OIDC設定後はIdP側の条件付きアクセスでMFAを強制
+  （詳細は `docs/ADR/ADR-001-sso-mfa.md`）
+- **バックアップ/復元**: `scripts/backup.sh`（日次）と `scripts/restore-drill.sh`（四半期）
+  （詳細は `docs/BACKUP_RESTORE.md`）
 
 ---
 

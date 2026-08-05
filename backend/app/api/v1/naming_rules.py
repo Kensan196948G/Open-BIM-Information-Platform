@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
 from app.core.deps import DB, CurrentUser
@@ -6,6 +6,7 @@ from app.models.naming_rule import ProjectNamingRule
 from app.models.project import Project
 from app.models.user import UserOrganization
 from app.schemas.naming_rule import NamingRuleCreate, NamingRuleResponse
+from app.services.audit import record_audit
 from app.services.naming_validator import (
     NamingRule,
     SegmentDefinition,
@@ -108,6 +109,7 @@ async def get_naming_rule(
 
 @router.put("", response_model=NamingRuleResponse, status_code=status.HTTP_200_OK)
 async def upsert_naming_rule(
+    request: Request,
     project_id: str,
     body: NamingRuleCreate,
     current_user: CurrentUser,
@@ -129,6 +131,21 @@ async def upsert_naming_rule(
             segments=segments_data,
         )
         db.add(rule)
+    await db.flush()
+    record_audit(
+        db,
+        event_type="naming_rule.upserted",
+        operation="upsert",
+        target_type="project",
+        target_id=project_id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        after_json={
+            "separator": rule.separator,
+            "segment_count": len(rule.segments),
+        },
+        result="success",
+    )
     await db.commit()
     await db.refresh(rule)
     from app.schemas.naming_rule import SegmentDefinitionSchema
@@ -144,6 +161,7 @@ async def upsert_naming_rule(
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_naming_rule(
+    request: Request,
     project_id: str,
     current_user: CurrentUser,
     db: DB,
@@ -155,4 +173,14 @@ async def delete_naming_rule(
     rule = result.scalar_one_or_none()
     if rule:
         await db.delete(rule)
+        record_audit(
+            db,
+            event_type="naming_rule.deleted",
+            operation="delete",
+            target_type="project",
+            target_id=project_id,
+            actor_id=current_user.id,
+            actor_ip=request.client.host if request.client else None,
+            result="success",
+        )
         await db.commit()

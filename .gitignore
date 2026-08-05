@@ -41,6 +41,8 @@ build/
 *.crt
 .env.*
 !.env.example
+certs/
+backups/
 
 # Logs
 *.log

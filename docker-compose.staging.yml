@@ -1,0 +1,13 @@
+version: "3.9"
+
+# ローカル/ステージング検証用オーバーレイ。
+# 本番Composeのサービス定義はそのまま使い、ホストのポートだけ分離する。
+#
+# 使い方:
+#   docker compose -f docker-compose.prod.yml -f docker-compose.staging.yml up -d --build
+
+services:
+  frontend:
+    ports: !override
+      - "8090:80"
+      - "8443:443"

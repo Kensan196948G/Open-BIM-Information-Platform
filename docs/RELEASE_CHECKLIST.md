@@ -67,6 +67,27 @@
 | 通知システム                           | 未実装               | Sprint 2               |
 | MinIO 本番容量設計                     | 開発設定             | デプロイ前に要設定     |
 | パフォーマンス負荷試験                 | smoke レベルのみ     | 本番相当環境で実施推奨 |
+| production Compose / TLS               | Phase 0 実装済み     | 証明書・本番URL決定後 |
+| 監査ログ書込・immutable トリガー       | Phase 0 実装済み     | PostgreSQL CI で検証 |
+| バックアップ自動化・復元演習           | 未実装               | Phase 0 残タスク      |
+| ClamAV アップロードスキャン            | PoC実装済み          | 本番パターン更新確認 |
+| Entra ID/HENNGE OIDC                   | PoC実装済み          | IdPテナント接続確認  |
+| ライセンス/NOTICE/SBOM                 | ドラフト実装済み     | 法務レビュー必須     |
+| SLI/SLO・アラート方針                 | 文書整備済み         | 本番環境で通知試験   |
+| インシデントRunbook・運用台帳         | 文書整備済み         | 本番環境で担当確定   |
+
+## 本番デプロイ判定（2026-08-05時点）
+
+| ゲート | 状態 |
+|---|---|
+| CI・テスト・lint・型検査・ビルド | ✅ 全green |
+| migration / rollback | ✅ 検証済み（新規PGでupgrade→downgrade→upgrade） |
+| バックアップ / 復元 | ✅ 隔離環境で復元演習済み |
+| 秘密情報・不要ファイル | ✅ gitleaks全履歴0件・.env非コミット |
+| 本番対象・ドメイン・Secrets | ❌ 未確定（本番環境が存在しない） |
+| Preview/staging 検証 | ✅ ローカル本番構成でスモーク・復元演習を実施 |
+| Branch Protection・必須CI | ⏳ 設定予定 |
+| 稼働判定 | ❌ 本番環境確定まで NO-GO |
 
 ---
 
