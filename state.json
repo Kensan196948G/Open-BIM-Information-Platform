@@ -8,7 +8,7 @@
   },
   "goal": "ISO 19650準拠のBIM情報基盤WebシステムをRelease Ready状態へ到達させる。全テスト通過・CI成功・blocker=0",
   "goal_type": "production-release",
-  "phase": "Verify",
+  "phase": "Release",
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
@@ -72,6 +72,18 @@
     "#naming-rules-platform-admin: 3 platform admin bypass tests for GET/PUT/DELETE naming-rules API"
   ],
   "blocked_issues": [],
+  "production_gate": {
+    "status": "blocked_pending_environment",
+    "blocker": "本番環境が未確定: ドメイン/DNSレコードなし、Cloudflare Pages・Neonプロジェクトなし、GitHub Actions Secrets/Environmentsなし、デプロイワークフローなし、本番ホスト未指定",
+    "required_to_unblock": [
+      "本番ドメイン（例: open-bim.mirai-dx-platform.com）とDNS・TLS証明書",
+      "本番ホスト（VM/オンプレ）またはクラウド実行環境とSSH/デプロイ経路",
+      "GitHub Actions Secrets（本番用SECRET_KEY・DB/MinIO資格情報・通知先）",
+      "バックアップ保存先と復元演習の本番実績",
+      "監視・通知基盤と一次対応担当者の指名"
+    ],
+    "resolved_at": null
+  },
   "security_review": {
     "coderabbit": "credits_exhausted",
     "codex_adversarial": "timeout_fallback_to_subagent",

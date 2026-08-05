@@ -343,4 +343,16 @@ def downgrade() -> None:
     op.drop_table('permissions')
     op.drop_index(op.f('ix_organizations_slug'), table_name='organizations')
     op.drop_table('organizations')
+    # SQLAlchemy Enum types persist after DROP TABLE unless removed explicitly.
+    for enum_type in (
+        "projectstatus",
+        "containertype",
+        "containerstate",
+        "securitylevel",
+        "workflowstatus",
+        "approvalresult",
+        "documenttype",
+        "documentstatus",
+    ):
+        op.execute(f"DROP TYPE IF EXISTS {enum_type};")
     # ### end Alembic commands ###

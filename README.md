@@ -138,6 +138,10 @@ flowchart LR
 | 💻 IT部門スタッフ（導入・運用担当） | [IT部門向けガイド](docs/IT_SETUP.md) |
 | 🔧 開発・保守担当エンジニア | [技術スタック詳細](docs/TECH_STACK.md) |
 | 🏗️ BIM管理者・設計担当 | [アーキテクチャ設計書](docs/ARCHITECTURE.md) |
+| 🚨 障害対応 | [インシデント対応 Runbook](docs/INCIDENT_RUNBOOK.md) |
+| 📈 監視・SLO | [SLI/SLO・アラート方針](docs/SLI_SLO.md) |
+| 💾 バックアップ・復元 | [バックアップ/復元ガイド](docs/BACKUP_RESTORE.md) |
+| 🗓️ 定期点検 | [運用台帳](docs/OPS_LEDGER.md)・[定期保守手順](docs/MAINTENANCE.md) |
 
 ---
 
@@ -147,6 +151,8 @@ flowchart LR
 - 第三者の適合性評価・認証（ISO 19650 / J-SOX / 監査）は**未取得**です。
 - 本番展開には、Phase 0（起動ガード・TLS・監査証跡・PostgreSQL試験・バックアップ等）と
   限定パイロット（2案件・30〜50名）の完了を前提としています。
+- 本番環境（ドメイン・ホスト・Secrets・監視先）は未確定のため、本番デプロイは未実施です。
+  コード・検証・運用手順の準備は完了しており、環境確定後に段階的デプロイを実施します。
 
 ---
 

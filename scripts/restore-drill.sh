@@ -33,7 +33,7 @@ START_TS="$(date +%s)"
 TMP_DIR="$(mktemp -d)"
 cleanup() {
   echo "🧹 隔離環境を停止します..."
-  docker compose -f docker-compose.restore.yml down --volumes --remove-orphans >/dev/null 2>&1 || true
+  docker compose -f docker-compose.restore.yml down --volumes >/dev/null 2>&1 || true
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
@@ -58,8 +58,12 @@ else
 docker run --rm \
   --network bim_platform_restore_net \
   -e "MC_HOST_restore=http://minioadmin:minioadmin123@minio:9000" \
+  minio/mc --config-dir /tmp/.mc mb --ignore-existing restore/bim-containers
+docker run --rm \
+  --network bim_platform_restore_net \
+  -e "MC_HOST_restore=http://minioadmin:minioadmin123@minio:9000" \
   -v "$TMP_DIR/minio:/backup:ro" \
-  minio/mc mirror --overwrite "/backup/$(basename "$MINIO_SRC_DIR")" restore/bim-containers
+  minio/mc --config-dir /tmp/.mc mirror --overwrite "/backup/$(basename "$MINIO_SRC_DIR")" restore/bim-containers
 fi
 
 echo "🔎 検証: レコード件数"

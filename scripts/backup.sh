@@ -22,6 +22,7 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
 NETWORK_NAME="${NETWORK_NAME:-bim_platform_net}"
+ENV_FILE="${ENV_FILE:-$PROJECT_DIR/.env}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 TMP_DIR="$(mktemp -d)"
 
@@ -30,10 +31,15 @@ if [[ -z "${BACKUP_ENCRYPTION_KEY:-}" ]]; then
   exit 1
 fi
 
-if [[ ! -f .env ]]; then
-  echo "❌ .env が見つかりません" >&2
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "❌ $ENV_FILE が見つかりません" >&2
   exit 1
 fi
+
+set -a
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+set +a
 
 mkdir -p "$BACKUP_DIR"
 
@@ -52,15 +58,17 @@ docker compose -f "$COMPOSE_FILE" exec -T postgres \
 
 # MinIO バケット mirror
 echo "  📦 MinIO mirror..."
+mkdir -p "$TMP_DIR/minio"
 docker run --rm \
   --network "$NETWORK_NAME" \
+  --user "$(id -u):$(id -g)" \
   -e "MC_HOST_local=http://${MINIO_ROOT_USER:-minioadmin}:${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD required}@minio:9000" \
   -v "$TMP_DIR/minio:/backup" \
-  minio/mc mirror --overwrite local/bim-containers "/backup/$TIMESTAMP"
+  minio/mc --config-dir /tmp/.mc mirror --overwrite local/bim-containers "/backup/$TIMESTAMP"
 
 # 設定ファイルのスナップショット
 echo "  ⚙️  config snapshot..."
-cp .env "$TMP_DIR/env.snapshot"
+cp "$ENV_FILE" "$TMP_DIR/env.snapshot"
 cp "$COMPOSE_FILE" "$TMP_DIR/compose.yml"
 cp frontend/nginx.conf "$TMP_DIR/nginx.conf" 2>/dev/null || true
 

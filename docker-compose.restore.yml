@@ -1,6 +1,10 @@
 version: "3.9"
 
 # 復元演習用の隔離環境（バックアップの検証専用。本番とは別ネットワーク/ボリューム）
+# プロジェクト名を bim-restore に固定し、down 時に本番/ステージングの
+# 同一ディレクトリ構成（bim_*）を巻き添えにしない。
+
+name: bim-restore
 
 services:
   postgres:
@@ -40,3 +44,7 @@ volumes:
 networks:
   default:
     name: bim_platform_restore_net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.222.0.0/24
