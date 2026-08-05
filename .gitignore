@@ -42,6 +42,7 @@ build/
 .env.*
 !.env.example
 certs/
+backups/
 
 # Logs
 *.log

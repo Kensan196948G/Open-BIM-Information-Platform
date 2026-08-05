@@ -1,0 +1,42 @@
+version: "3.9"
+
+# 復元演習用の隔離環境（バックアップの検証専用。本番とは別ネットワーク/ボリューム）
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: bim_restore_postgres
+    environment:
+      POSTGRES_DB: bim_platform
+      POSTGRES_USER: bim_user
+      POSTGRES_PASSWORD: bim_password
+    volumes:
+      - restore_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bim_user -d bim_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    container_name: bim_restore_minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    command: server /data
+    volumes:
+      - restore_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  restore_postgres_data:
+  restore_minio_data:
+
+networks:
+  default:
+    name: bim_platform_restore_net

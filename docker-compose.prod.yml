@@ -59,6 +59,22 @@ services:
       retries: 3
     restart: unless-stopped
 
+  clamav:
+    image: clamav/clamav:stable
+    container_name: bim_clamav
+    environment:
+      CLAMD_STARTUP_TIMEOUT: "180s"
+      CLAMD_TCP_SOCKET: "3310"
+    volumes:
+      - clamav_db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "pidof clamd || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -74,12 +90,17 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set in .env}
+      AV_ENABLED: "true"
+      CLAMD_HOST: clamav
+      CLAMD_PORT: "3310"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      clamav:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
     healthcheck:
@@ -117,3 +138,8 @@ volumes:
   postgres_data:
   minio_data:
   redis_data:
+  clamav_db:
+
+networks:
+  default:
+    name: bim_platform_net
