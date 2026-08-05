@@ -205,6 +205,12 @@ mc mirror local/bim-containers /backup/minio/$(date +%Y%m%d)/
 - **監査ログ監視**: 認証失敗・権限変更イベントを定期レビュー
 - **依存更新**: 月次で `npm audit` / `pip-audit` 実行、Critical/High は即対応
 - **バックアップ暗号化**: バックアップファイルは暗号化保存
+- **マルウェア対策**: 本番ComposeのClamAVでアップロードをスキャン。EICAR検証は
+  `./scripts/av-eicar-test.sh`（詳細は `docs/ADR/ADR-003-malware-scanning.md`）
+- **SSO/MFA**: OIDC設定後はIdP側の条件付きアクセスでMFAを強制
+  （詳細は `docs/ADR/ADR-001-sso-mfa.md`）
+- **バックアップ/復元**: `scripts/backup.sh`（日次）と `scripts/restore-drill.sh`（四半期）
+  （詳細は `docs/BACKUP_RESTORE.md`）
 
 ---
 

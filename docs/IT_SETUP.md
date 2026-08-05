@@ -156,6 +156,14 @@ nano .env   # 各値を編集
 | `SECRET_KEY` | JWT署名キー | ランダム64文字以上 |
 | `MINIO_ROOT_PASSWORD` | ストレージ管理パスワード | 16文字以上 |
 
+**任意（本番セキュリティ強化）:**
+
+| 変数名 | 説明 |
+|---|---|
+| `AV_ENABLED` | `true` でClamAVスキャン有効（本番Composeでは自動設定） |
+| `OIDC_ENABLED` / `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_REDIRECT_URI` | Entra ID/HENNGE 連携（認可コード+PKCE） |
+| `BACKUP_DIR` / `BACKUP_ENCRYPTION_KEY` | バックアップ保存先と暗号鍵（`scripts/backup.sh`） |
+
 ### ステップ 4: systemd サービス登録（自動起動設定）
 
 ```bash

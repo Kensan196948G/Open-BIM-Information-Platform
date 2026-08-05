@@ -70,6 +70,9 @@
 | production Compose / TLS               | Phase 0 実装済み     | 証明書・本番URL決定後 |
 | 監査ログ書込・immutable トリガー       | Phase 0 実装済み     | PostgreSQL CI で検証 |
 | バックアップ自動化・復元演習           | 未実装               | Phase 0 残タスク      |
+| ClamAV アップロードスキャン            | PoC実装済み          | 本番パターン更新確認 |
+| Entra ID/HENNGE OIDC                   | PoC実装済み          | IdPテナント接続確認  |
+| ライセンス/NOTICE/SBOM                 | ドラフト実装済み     | 法務レビュー必須     |
 
 ---
 

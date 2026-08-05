@@ -116,7 +116,7 @@
     "runbook": "docs/OPERATIONS.md",
     "executor": "human (manual deploy required; CTO does not auto-deploy)",
     "signoff": "pending",
-    "phase0_gate": "未完了（外部評価 Phase 0 の完了を条件に再判定）"
+    "phase0_gate": "一部完了（AV/バックアップ/SSO PoC実装済み・本番IdP接続と復元実績は未）"
   },
   "learning": {
     "failure_patterns": [
