@@ -39,12 +39,20 @@ def _backend_components() -> list[dict]:
 
 
 def _frontend_components() -> list[dict]:
-    if shutil.which("license-checker") is None:
+    local_license_checker = (
+        ROOT / "frontend" / "node_modules" / ".bin" / "license-checker"
+    )
+    license_checker = (
+        str(local_license_checker)
+        if local_license_checker.exists()
+        else shutil.which("license-checker")
+    )
+    if license_checker is None:
         sys.exit(
             "license-checker が見つかりません。"
             "`npm install --no-save license-checker` を実行してください。"
         )
-    raw = json.loads(_run(["license-checker", "--json"]))
+    raw = json.loads(_run([license_checker, "--json"]))
     components = []
     for full_name, info in raw.items():
         if "@" in full_name:

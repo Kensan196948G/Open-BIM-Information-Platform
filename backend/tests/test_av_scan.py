@@ -35,9 +35,7 @@ async def _serve_clamd(reader, writer, virus: bool) -> None:
                     if not chunk:
                         return
                     remaining -= len(chunk)
-            response = (
-                b"stream: Eicar-Test-Signature FOUND" if virus else b"stream: OK"
-            )
+            response = b"stream: Eicar-Test-Signature FOUND" if virus else b"stream: OK"
             writer.write(response + b"\0")
             await writer.drain()
     except (asyncio.IncompleteReadError, ConnectionError):

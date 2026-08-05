@@ -51,6 +51,8 @@ jobs:
       run:
         working-directory: backend
     env:
+      # App engine (used by /health) must point at the same Postgres service.
+      DATABASE_URL: postgresql+asyncpg://bim_user:bim_password@localhost:5432/bim_test
       # Run the full backend suite against PostgreSQL so row locks, enums
       # and the immutable audit trigger are exercised in CI.
       TEST_DATABASE_URL: postgresql+asyncpg://bim_user:bim_password@localhost:5432/bim_test
@@ -82,7 +84,10 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -e ".[dev]" pip-audit
-      - run: pip-audit
+      - run: pip install --upgrade "setuptools>=83.0.0"
+      # PYSEC-2026-1325 (ecdsa/Minerva) has no fixed release and ecdsa is never
+      # used at runtime (HS256/RS256 only) — ignored with documented justification.
+      - run: pip-audit --ignore-vuln PYSEC-2026-1325
 
   sbom:
     name: Generate SBOM (CycloneDX)
@@ -187,6 +192,9 @@ jobs:
       SECRET_KEY: e2e-secret-key
       ENVIRONMENT: test
       CORS_ORIGINS: http://localhost:4173
+      # E2E performs many logins from one IP; raise in-process limits for the test env.
+      LOGIN_RATE_LIMIT: 10000
+      REGISTER_RATE_LIMIT: 10000
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5

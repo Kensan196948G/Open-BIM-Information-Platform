@@ -77,7 +77,8 @@ def test_localhost_cors_rejected_in_production() -> None:
         _strong_production(CORS_ORIGINS="http://localhost:5173")
 
 
-def test_development_defaults_remain_permissive() -> None:
+def test_development_defaults_remain_permissive(monkeypatch) -> None:
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
     settings = Settings(_env_file=None)
     assert settings.ENVIRONMENT == "development"
     assert settings.SECRET_KEY == "dev-secret-key-change-in-production"
