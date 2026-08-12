@@ -254,9 +254,10 @@ async def upload_file(
         change_summary=None,
         created_by=current_user.id,
     )
+    db.add(revision)
+    await db.flush()  # revision must exist before container_files.revision_id FK
     container_file.revision_id = revision.id
     db.add(container_file)
-    db.add(revision)
     record_audit(
         db,
         event_type="file.uploaded",
