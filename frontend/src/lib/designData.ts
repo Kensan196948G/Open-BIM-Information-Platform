@@ -2252,6 +2252,8 @@ export const demoInformationContainers: InformationContainer[] =
     naming_valid: container.naming === "pass",
     naming_issues: container.issue ?? null,
     created_by: container.owner,
+    created_at: container.updated,
+    updated_at: container.updated,
   }));
 
 // ---------------------------------------------------------------------------

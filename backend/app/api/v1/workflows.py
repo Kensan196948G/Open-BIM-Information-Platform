@@ -83,6 +83,24 @@ class WorkflowResponse(BaseModel):
     initiated_by: str
 
 
+class PendingApprovalResponse(BaseModel):
+    approval_id: str
+    workflow_id: str
+    workflow_status: str
+    approval_stage: str
+    target_type: str
+    target_id: str
+    project_id: str
+    project_name: str
+    container_id: str | None = None
+    container_identifier: str | None = None
+    container_title: str | None = None
+    container_state: str | None = None
+    initiated_by: str
+    created_at: str | None = None
+    comment: str | None = None
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -143,6 +161,56 @@ async def _validate_assignees(assignee_ids: list[str], org_id: str, db) -> None:
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
+
+
+@router.get("/tasks/mine", response_model=list[PendingApprovalResponse])
+async def list_my_pending_approvals(
+    current_user: CurrentUser,
+    db: DB,
+) -> list[PendingApprovalResponse]:
+    """Approval tasks awaiting action by the current user (with container context)."""
+    rows = await db.execute(
+        select(Approval, WorkflowInstance, Project, InformationContainer)
+        .join(WorkflowInstance, WorkflowInstance.id == Approval.workflow_id)
+        .join(Project, Project.id == WorkflowInstance.project_id)
+        .outerjoin(
+            InformationContainer,
+            (InformationContainer.id == WorkflowInstance.target_id)
+            & (WorkflowInstance.target_type == WorkflowTargetType.container.value),
+        )
+        .where(
+            Approval.approver_id == current_user.id,
+            Approval.result.is_(None),
+            WorkflowInstance.status == WorkflowStatus.in_progress,
+        )
+        .order_by(WorkflowInstance.created_at.asc(), Approval.approval_stage.asc())
+    )
+    out: list[PendingApprovalResponse] = []
+    for approval, workflow, project, container in rows.all():
+        out.append(
+            PendingApprovalResponse(
+                approval_id=approval.id,
+                workflow_id=workflow.id,
+                workflow_status=enum_value(workflow.status),
+                approval_stage=approval.approval_stage,
+                target_type=approval.target_type,
+                target_id=approval.target_id,
+                project_id=workflow.project_id,
+                project_name=project.name,
+                container_id=container.id if container else None,
+                container_identifier=container.identifier if container else None,
+                container_title=container.title if container else None,
+                container_state=enum_value(container.current_state)
+                if container
+                else None,
+                initiated_by=workflow.initiated_by,
+                created_at=workflow.created_at.isoformat()
+                if workflow.created_at
+                else None,
+                comment=workflow.comment,
+            )
+        )
+    return out
 
 
 @router.post("", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)

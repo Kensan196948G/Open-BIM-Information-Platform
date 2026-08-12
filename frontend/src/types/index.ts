@@ -47,6 +47,8 @@ export interface InformationContainer {
   naming_valid: boolean;
   naming_issues: string | null;
   created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AuditLog {
@@ -60,6 +62,36 @@ export interface AuditLog {
   operation: string;
   result: string;
   reason: string | null;
+}
+
+export interface ContainerFile {
+  id: string;
+  container_id: string;
+  original_filename: string;
+  storage_key: string;
+  content_type: string;
+  file_size_bytes: number;
+  checksum_sha256: string;
+  uploaded_by: string;
+  created_at: string;
+}
+
+export interface PendingApproval {
+  approval_id: string;
+  workflow_id: string;
+  workflow_status: string;
+  approval_stage: string;
+  target_type: string;
+  target_id: string;
+  project_id: string;
+  project_name: string;
+  container_id: string | null;
+  container_identifier: string | null;
+  container_title: string | null;
+  container_state: string | null;
+  initiated_by: string;
+  created_at: string | null;
+  comment: string | null;
 }
 
 export interface PaginatedResponse<T> {

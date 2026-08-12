@@ -9,10 +9,10 @@ import {
   Shield,
   Tag,
   User,
-  Users,
 } from "lucide-react";
-import { Avatar } from "@/components/design/Primitives";
-import { designUsers } from "@/lib/designData";
+import { useAuthStore } from "@/hooks/useAuthStore";
+import { api } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 
 type Tab = "profile" | "org" | "notifications" | "security" | "rbac";
 
@@ -74,7 +74,9 @@ const ROLES = [
 ];
 
 function ProfileTab() {
-  const me = designUsers[0];
+  const user = useAuthStore((s) => s.user);
+  if (!user) return null;
+  const initials = user.full_name?.slice(0, 1) || user.username?.slice(0, 1) || "?";
   return (
     <div className="space-y-6">
       <div className="app-card-pad">
@@ -82,54 +84,43 @@ function ProfileTab() {
         <div className="flex items-start gap-5">
           <div
             className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl text-2xl font-bold text-white"
-            style={{ background: me.color }}
+            style={{ background: "var(--primary)" }}
           >
-            {me.initials}
+            {initials}
           </div>
           <div className="flex-1 space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="t-tiny mb-1 block">氏名</label>
-                <input className="app-field" defaultValue={me.name} />
-              </div>
-              <div>
-                <label className="t-tiny mb-1 block">表示名 (イニシャル)</label>
-                <input className="app-field mono" defaultValue={me.initials} />
+                <input className="app-field" defaultValue={user.full_name} readOnly />
               </div>
               <div>
                 <label className="t-tiny mb-1 block">メールアドレス</label>
                 <input
                   className="app-field"
                   type="email"
-                  defaultValue="k.sato@taisei-design.co.jp"
+                  defaultValue={user.email}
+                  readOnly
                 />
               </div>
               <div>
-                <label className="t-tiny mb-1 block">所属組織</label>
-                <input className="app-field" defaultValue={me.org} />
-              </div>
-              <div>
-                <label className="t-tiny mb-1 block">役職・ロール</label>
-                <input className="app-field" defaultValue={me.role} />
-              </div>
-              <div>
-                <label className="t-tiny mb-1 block">言語</label>
-                <select className="app-field">
-                  <option value="ja">日本語</option>
-                  <option value="en">English</option>
-                </select>
+                <label className="t-tiny mb-1 block">ユーザー名</label>
+                <input className="app-field mono" defaultValue={user.username} readOnly />
               </div>
             </div>
-            <button className="app-btn app-btn-primary app-btn-sm">
-              <Save className="h-3.5 w-3.5" />
-              保存
-            </button>
+            <p className="t-tiny">
+              プロフィール変更は管理者（組織・SSO設定）が行います。
+              {user.is_platform_admin ? " プラットフォーム管理者" : ""}
+            </p>
           </div>
         </div>
       </div>
 
       <div className="app-card-pad">
         <div className="t-h2 mb-4">パスワード変更</div>
+        <p className="t-sec mb-3 text-xs">
+          パスワード変更は未実装です。SSO（Entra ID / HENNGE）導入後は IdP 側で実施してください。
+        </p>
         <div className="space-y-3">
           <div>
             <label className="t-tiny mb-1 block">現在のパスワード</label>
@@ -157,7 +148,7 @@ function ProfileTab() {
               />
             </div>
           </div>
-          <button className="app-btn app-btn-sm">
+          <button className="app-btn app-btn-sm" disabled title="未実装">
             <Lock className="h-3.5 w-3.5" />
             パスワードを更新
           </button>
@@ -168,6 +159,21 @@ function ProfileTab() {
 }
 
 function OrgTab() {
+  const { data: orgs = [] } = useQuery({
+    queryKey: ["organizations"],
+    queryFn: () =>
+      api
+        .get<
+          Array<{
+            id: string;
+            name: string;
+            slug: string;
+            description: string | null;
+            is_active: boolean;
+          }>
+        >("/organizations")
+        .then((r) => r.data),
+  });
   return (
     <div className="space-y-5">
       <div className="app-card-pad">
@@ -176,22 +182,22 @@ function OrgTab() {
           組織名・識別コード・適用規格を管理します。
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          {[
-            ["組織名", "大成設計株式会社"],
-            ["組織コード", "ORG-TKO"],
-            ["適用規格", "ISO 19650-2:2018"],
-            ["タイムゾーン", "Asia/Tokyo (JST +09:00)"],
-          ].map(([label, val]) => (
-            <div key={label}>
-              <label className="t-tiny mb-1 block">{label}</label>
-              <input className="app-field" defaultValue={val} />
+          {orgs.length === 0 && <p className="t-sec">所属組織がありません。</p>}
+          {orgs.map((org) => (
+            <div
+              key={org.id}
+              className="rounded-xl border p-3"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <div className="text-sm font-semibold">{org.name}</div>
+              <div className="mono t-tiny">{org.slug}</div>
+              {org.description && <div className="t-tiny mt-1">{org.description}</div>}
+              <span className={`app-badge app-badge-sq ${org.is_active ? "tone-success" : "tone-neutral"}`}>
+                {org.is_active ? "有効" : "無効"}
+              </span>
             </div>
           ))}
         </div>
-        <button className="app-btn app-btn-primary app-btn-sm mt-3">
-          <Save className="h-3.5 w-3.5" />
-          保存
-        </button>
       </div>
 
       <div className="app-card overflow-hidden">
@@ -200,56 +206,13 @@ function OrgTab() {
           style={{ borderBottom: "1px solid var(--border)" }}
         >
           <div className="t-h2">メンバー管理</div>
-          <button className="app-btn app-btn-sm">
-            <Users className="h-3.5 w-3.5" />
-            招待
-          </button>
         </div>
-        <table className="app-table">
-          <thead>
-            <tr>
-              <th>メンバー</th>
-              <th>役職</th>
-              <th>所属</th>
-              <th>ロール</th>
-              <th>状態</th>
-            </tr>
-          </thead>
-          <tbody>
-            {designUsers.map((u, i) => (
-              <tr key={u.id}>
-                <td>
-                  <div className="flex items-center gap-2">
-                    <Avatar user={u} size={28} />
-                    <span className="text-sm font-medium">{u.name}</span>
-                  </div>
-                </td>
-                <td>
-                  <span className="t-sec text-xs">{u.role}</span>
-                </td>
-                <td>
-                  <span className="t-sec text-xs">{u.org}</span>
-                </td>
-                <td>
-                  <span
-                    className="app-badge app-badge-sq"
-                    style={{ fontSize: 11 }}
-                  >
-                    {i === 0 ? "管理者" : i < 3 ? "BIM管理" : "設計担当"}
-                  </span>
-                </td>
-                <td>
-                  <span
-                    className="app-badge app-badge-sq tone-success"
-                    style={{ fontSize: 11 }}
-                  >
-                    アクティブ
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="px-4 py-4">
+          <p className="t-sec text-xs">
+            利用者の有効化・無効化・組織割当はプラットフォーム管理者向け管理API
+            （GET/PATCH /api/v1/admin/users）で実施します。管理UIはロードマップに含まれます。
+          </p>
+        </div>
       </div>
     </div>
   );

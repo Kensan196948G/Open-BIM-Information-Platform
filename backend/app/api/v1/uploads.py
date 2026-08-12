@@ -10,7 +10,7 @@ from app.core.deps import DB, CurrentUser
 from app.models.container import ContainerFile, ContainerState, InformationContainer
 from app.models.project import Project
 from app.models.user import UserOrganization
-from app.schemas.upload import FileUploadResponse
+from app.schemas.upload import FileListResponse, FileUploadResponse
 from app.services import storage as storage_svc
 from app.services.audit import enum_value, record_audit
 from app.services.av_scan import scan_bytes
@@ -255,6 +255,96 @@ async def upload_file(
         uploaded_by=current_user.id,
         created_at=container_file.created_at.isoformat(),
     )
+
+
+@router.get("/files", response_model=FileListResponse)
+async def list_files(
+    project_id: str,
+    container_id: str,
+    current_user: CurrentUser,
+    db: DB,
+) -> FileListResponse:
+    """List files in a container (newest first)."""
+    await _get_container_or_403(project_id, container_id, current_user, db)
+    result = await db.execute(
+        select(ContainerFile)
+        .where(ContainerFile.container_id == container_id)
+        .order_by(ContainerFile.created_at.desc())
+    )
+    files = result.scalars().all()
+    return FileListResponse(
+        items=[
+            FileUploadResponse(
+                id=f.id,
+                container_id=f.container_id,
+                original_filename=f.original_filename,
+                storage_key=f.storage_key,
+                content_type=f.content_type,
+                file_size_bytes=f.file_size_bytes,
+                checksum_sha256=f.checksum_sha256,
+                uploaded_by=f.uploaded_by,
+                created_at=f.created_at.isoformat(),
+            )
+            for f in files
+        ],
+        total=len(files),
+    )
+
+
+@router.delete("/files/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_file(
+    request: Request,
+    project_id: str,
+    container_id: str,
+    file_id: str,
+    current_user: CurrentUser,
+    db: DB,
+) -> None:
+    """Delete a file from a WIP container (metadata + object + audit trail)."""
+    container = await _get_container_or_403(project_id, container_id, current_user, db)
+    if container.current_state != ContainerState.wip:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Files can only be deleted from WIP containers",
+        )
+    result = await db.execute(
+        select(ContainerFile).where(
+            ContainerFile.id == file_id,
+            ContainerFile.container_id == container_id,
+        )
+    )
+    file_record = result.scalar_one_or_none()
+    if not file_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
+        )
+
+    try:
+        storage_svc.delete_file(file_record.storage_key)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Storage service unavailable: {exc}",
+        ) from exc
+
+    await db.delete(file_record)
+    record_audit(
+        db,
+        event_type="file.deleted",
+        operation="delete",
+        target_type="container",
+        target_id=container_id,
+        actor_id=current_user.id,
+        actor_ip=request.client.host if request.client else None,
+        before_json={
+            "file_id": file_record.id,
+            "original_filename": file_record.original_filename,
+            "storage_key": file_record.storage_key,
+            "checksum_sha256": file_record.checksum_sha256,
+        },
+        result="success",
+    )
+    await db.commit()
 
 
 @router.get("/files/{file_id}/download-url")

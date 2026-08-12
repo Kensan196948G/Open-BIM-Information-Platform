@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     REGISTER_RATE_LIMIT: int = 3
     REGISTER_RATE_WINDOW_SECONDS: int = 3600
 
+    # Self-registration (production should set false and use admin-invited users)
+    ALLOW_SELF_REGISTRATION: bool = True
+
     # Malware scanning (ClamAV / clamd)
     AV_ENABLED: bool = False
     CLAMD_HOST: str = "clamav"
@@ -69,10 +72,19 @@ class Settings(BaseSettings):
     OIDC_SCOPES: str = "openid profile email"
     OIDC_JWKS_URI: str = ""
     OIDC_JIT_ACTIVE: bool = True
+    # Comma-separated email domain allowlist for OIDC JIT provisioning.
+    # Empty (default) = any IdP user may be provisioned; production should set it.
+    OIDC_ALLOWED_DOMAINS: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",")]
+
+    @property
+    def oidc_allowed_domains_list(self) -> list[str]:
+        return [
+            d.strip().lower() for d in self.OIDC_ALLOWED_DOMAINS.split(",") if d.strip()
+        ]
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":
@@ -83,6 +95,11 @@ class Settings(BaseSettings):
         problems: list[str] = []
         if self.DEBUG:
             problems.append("DEBUG must be False when ENVIRONMENT=production")
+        if self.ALLOW_SELF_REGISTRATION:
+            problems.append(
+                "ALLOW_SELF_REGISTRATION must be false when ENVIRONMENT=production "
+                "(users must be provisioned by administrators or OIDC)"
+            )
         if self.SECRET_KEY in WEAK_SECRET_KEYS or len(self.SECRET_KEY) < 32:
             problems.append(
                 "SECRET_KEY is missing, weak, or shorter than 32 characters"

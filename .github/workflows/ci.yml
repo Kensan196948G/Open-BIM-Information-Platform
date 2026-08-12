@@ -207,6 +207,9 @@ jobs:
       - name: Run migrations
         working-directory: backend
         run: alembic upgrade head
+      - name: Seed E2E data
+        working-directory: backend
+        run: python ../scripts/seed_e2e.py
       - name: Start backend
         working-directory: backend
         run: |

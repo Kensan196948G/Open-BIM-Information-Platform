@@ -79,6 +79,25 @@ async def oidc_callback(
             detail="IdP did not return an email claim",
         )
 
+    allowed_domains = settings.oidc_allowed_domains_list
+    if allowed_domains:
+        domain = email.split("@")[-1].lower() if "@" in email else ""
+        if domain not in allowed_domains:
+            record_audit(
+                db,
+                event_type="user.oidc_login_rejected",
+                operation="login",
+                target_type="user",
+                actor_ip=request.client.host if request.client else None,
+                result="failure",
+                reason=f"email domain '{domain}' not in OIDC_ALLOWED_DOMAINS",
+            )
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account domain is not permitted. Contact your administrator.",
+            )
+
     result = await db.execute(
         select(User).where((User.email == email) | (User.oidc_sub == sub))
     )

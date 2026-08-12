@@ -3,18 +3,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 import {
   Calendar,
-  Clock,
   FolderOpen,
   Package,
   Plus,
   TrendingUp,
-  Users,
   X,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { Avatar } from "@/components/design/Primitives";
-import { demoProjects, designUsers } from "@/lib/designData";
-import type { PaginatedResponse, Project, ProjectStatus } from "@/types";
+import { listContainers } from "@/api/containers";
+import { demoProjects } from "@/lib/designData";
+import type {
+  ContainerState,
+  PaginatedResponse,
+  Project,
+  ProjectStatus,
+} from "@/types";
 
 const STATUS_META: Record<
   ProjectStatus,
@@ -26,54 +29,38 @@ const STATUS_META: Record<
   archived: { tone: "neutral", label: "アーカイブ", dot: "var(--wip-dot)" },
 };
 
-const CDE_STATES = ["wip", "shared", "published", "archived"] as const;
+const CDE_STATES: ContainerState[] = ["WIP", "Shared", "Published", "Archived"];
 const CDE_LABELS: Record<string, string> = {
-  wip: "WIP",
-  shared: "Shared",
-  published: "Published",
-  archived: "Archived",
+  WIP: "WIP",
+  Shared: "Shared",
+  Published: "Published",
+  Archived: "Archived",
 };
-
-function projectDist(index: number) {
-  const vals = [22 + index * 3, 17, 49, 12];
-  const total = vals.reduce((a, b) => a + b, 0);
-  return vals.map((v) => ({ pct: (v / total) * 100, count: v * 8 }));
-}
 
 function ProjectDetail({
   project,
-  index,
   onClose,
 }: {
   project: Project;
-  index: number;
   onClose: () => void;
 }) {
   const status = STATUS_META[project.status];
-  const dist = projectDist(index);
-  const members = designUsers.slice(0, 4 + (index % 3));
-  const containers = (420 + index * 86).toLocaleString();
-  const compliance = 91 + (index % 7);
-  const pendingApprovals = index < 2 ? index + 2 : 0;
-
-  const recentActivity = [
-    {
-      action: "コンテナ共有申請",
-      user: designUsers[index % 5].name,
-      at: "2時間前",
-    },
-    {
-      action: "命名規則更新",
-      user: designUsers[(index + 1) % 5].name,
-      at: "5時間前",
-    },
-    { action: "承認完了", user: designUsers[(index + 2) % 5].name, at: "昨日" },
-    {
-      action: "新規コンテナ作成",
-      user: designUsers[(index + 3) % 5].name,
-      at: "昨日",
-    },
-  ];
+  const { data: containersData } = useQuery({
+    queryKey: ["project-containers", project.id],
+    queryFn: () => listContainers(project.id, { size: 100 }),
+  });
+  const containers = containersData?.items ?? [];
+  const totalContainers = containersData?.total ?? containers.length;
+  const dist = CDE_STATES.map((state) => {
+    const count = containers.filter((c) => c.current_state === state).length;
+    return {
+      pct: totalContainers > 0 ? (count / totalContainers) * 100 : 0,
+      count,
+    };
+  });
+  const named = containers.filter((c) => c.naming_valid).length;
+  const compliance =
+    containers.length > 0 ? Math.round((named / containers.length) * 100) : 0;
 
   return (
     <div
@@ -121,12 +108,6 @@ function ProjectDetail({
             <Calendar className="h-3 w-3" />
             {project.start_date} 〜 {project.end_date}
           </span>
-          {pendingApprovals > 0 && (
-            <span className="app-badge app-badge-sq tone-warning">
-              <Clock className="h-3 w-3" />
-              承認待ち {pendingApprovals}
-            </span>
-          )}
         </div>
 
         {/* KPI row */}
@@ -134,13 +115,8 @@ function ProjectDetail({
           {[
             {
               icon: <Package className="h-4 w-4" />,
-              value: containers,
+              value: totalContainers.toLocaleString(),
               label: "コンテナ",
-            },
-            {
-              icon: <Users className="h-4 w-4" />,
-              value: String(members.length),
-              label: "メンバー",
             },
             {
               icon: <TrendingUp className="h-4 w-4" />,
@@ -226,46 +202,17 @@ function ProjectDetail({
         {/* メンバー */}
         <div>
           <div className="t-tiny mb-2 font-medium">プロジェクトメンバー</div>
-          <div className="space-y-2">
-            {members.map((u) => (
-              <div key={u.id} className="flex items-center gap-2">
-                <Avatar user={u} size={26} />
-                <div className="min-w-0 flex-1">
-                  <div
-                    className="truncate text-xs font-medium"
-                    style={{ color: "var(--text)" }}
-                  >
-                    {u.name}
-                  </div>
-                  <div className="t-tiny truncate">
-                    {u.role} · {u.org}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="t-sec text-xs">
+            メンバー一覧は管理API（ロードマップ）で提供予定です。現在は組織単位のアクセス制御を適用しています。
+          </p>
         </div>
 
         {/* 最近の活動 */}
         <div>
           <div className="t-tiny mb-2 font-medium">最近の活動</div>
-          <div className="space-y-2">
-            {recentActivity.map((a, i) => (
-              <div key={i} className="flex items-start gap-2">
-                <span
-                  className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: "var(--primary)" }}
-                />
-                <div className="min-w-0 flex-1">
-                  <span className="text-xs" style={{ color: "var(--text)" }}>
-                    {a.action}
-                  </span>
-                  <span className="t-sec text-xs"> — {a.user}</span>
-                </div>
-                <span className="t-tiny shrink-0">{a.at}</span>
-              </div>
-            ))}
-          </div>
+          <p className="t-sec text-xs">
+            状態遷移・承認操作は監査ログに記録されます（監査ログは管理者のみ閲覧可）。
+          </p>
         </div>
       </div>
 
@@ -318,7 +265,6 @@ export default function ProjectsPage() {
       : [];
   const shown = projects.filter((p) => filter === "all" || p.status === filter);
   const selectedProject = shown.find((p) => p.id === selectedId) ?? null;
-  const selectedIndex = shown.findIndex((p) => p.id === selectedId);
 
   return (
     <div className="flex h-full flex-col" style={{ minHeight: 0 }}>
@@ -442,9 +388,8 @@ export default function ProjectsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {shown.map((project, index) => {
+              {shown.map((project) => {
                 const status = STATUS_META[project.status];
-                const dist = projectDist(index);
                 const isSelected = selectedId === project.id;
                 return (
                   <button
@@ -493,16 +438,14 @@ export default function ProjectsPage() {
                     <div className="px-4 pb-3">
                       <div className="mb-1 flex justify-between">
                         <span className="t-tiny">CDE 状態</span>
-                        <span className="t-tiny mono">
-                          {(420 + index * 86).toLocaleString()} コンテナ
-                        </span>
+                        <span className="t-tiny">詳細パネルで件数を表示</span>
                       </div>
                       <div className="flex h-1.5 overflow-hidden rounded-full">
-                        {CDE_STATES.map((state, i) => (
+                        {CDE_STATES.map((state) => (
                           <div
                             key={state}
                             style={{
-                              width: `${dist[i].pct}%`,
+                              width: "25%",
                               background: `var(--${state}-dot)`,
                             }}
                           />
@@ -514,20 +457,10 @@ export default function ProjectsPage() {
                       className="flex items-center gap-3 border-t px-4 py-2.5"
                       style={{ borderColor: "var(--border)" }}
                     >
-                      <div className="flex items-center -space-x-2">
-                        {designUsers.slice(0, 3).map((u) => (
-                          <Avatar key={u.id} user={u} size={22} />
-                        ))}
-                      </div>
+                      <span className="mono t-tiny">{project.code}</span>
                       <span className="t-tiny flex-1">
                         {project.start_date} 〜 {project.end_date}
                       </span>
-                      {index < 2 && (
-                        <span className="app-badge app-badge-sq tone-warning h-6 text-[11px]">
-                          <Clock className="h-2.5 w-2.5" />
-                          承認 {index + 2}
-                        </span>
-                      )}
                     </div>
                   </button>
                 );
@@ -541,7 +474,6 @@ export default function ProjectsPage() {
           <div className="app-card min-h-0 overflow-hidden">
             <ProjectDetail
               project={selectedProject}
-              index={selectedIndex}
               onClose={() => setSelectedId(null)}
             />
           </div>

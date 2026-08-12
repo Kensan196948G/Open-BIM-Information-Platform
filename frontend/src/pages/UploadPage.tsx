@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useParams } from "react-router";
+import { useMemo, useRef, useState } from "react";
+import { Link, useParams } from "react-router";
 import {
   AlertCircle,
   AlertTriangle,
@@ -10,7 +10,9 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { api } from "@/lib/api";
 import { namingSegments } from "@/lib/designData";
+import type { ContainerType, SecurityLevel } from "@/types";
 
 const allowed = {
   Originator: ["ARC", "STR", "MEP", "CIV", "LAN", "FAC"],
@@ -30,9 +32,16 @@ function validateSegment(key: string, value: string, projectCode: string) {
   return { status: "pass", message: "" };
 }
 
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function UploadPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const projectCode = (projectId ?? "TKO").slice(0, 3).toUpperCase();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [segments, setSegments] = useState<Record<string, string>>({
     Project: projectCode,
     Originator: "ARC",
@@ -43,8 +52,13 @@ export default function UploadPage() {
     Number: "0001",
   });
   const [title, setTitle] = useState("");
-  const [file, setFile] = useState<{ name: string; size: string } | null>(null);
+  const [containerType, setContainerType] = useState<ContainerType>("document");
+  const [securityLevel, setSecurityLevel] = useState<SecurityLevel>("limited");
+  const [file, setFile] = useState<File | null>(null);
   const [done, setDone] = useState(false);
+  const [createdContainerId, setCreatedContainerId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const results = useMemo(
     () =>
@@ -55,13 +69,55 @@ export default function UploadPage() {
       })),
     [projectCode, segments],
   );
-  const identifier = namingSegments.map((segment) => segments[segment.key] || "-").join("-");
+  const identifier = namingSegments
+    .map((segment) => segments[segment.key] || "-")
+    .join("-");
   const fails = results.filter((r) => r.status === "fail").length;
   const warns = results.filter((r) => r.status === "warn").length;
   const overall = fails > 0 ? "fail" : warns > 0 ? "warn" : "pass";
 
   const setSegment = (key: string, value: string) => {
     setSegments((current) => ({ ...current, [key]: value.toUpperCase() }));
+  };
+
+  const isDemo = projectId === "demo";
+
+  const handleSubmit = async () => {
+    if (isDemo) {
+      setDone(true);
+      return;
+    }
+    if (!projectId || overall === "fail" || !title || !file) return;
+    setError("");
+    setSubmitting(true);
+    try {
+      const containerRes = await api.post<{ id: string }>(
+        `/projects/${projectId}/containers`,
+        {
+          identifier,
+          title,
+          container_type: containerType,
+          security_level: securityLevel,
+        },
+      );
+      const containerId = containerRes.data.id;
+      const form = new FormData();
+      form.append("file", file);
+      await api.post(
+        `/projects/${projectId}/containers/${containerId}/upload`,
+        form,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      setCreatedContainerId(containerId);
+      setDone(true);
+    } catch (err) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "登録に失敗しました。入力内容を確認してください。";
+      setError(String(detail));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (done) {
@@ -72,10 +128,21 @@ export default function UploadPage() {
             <CheckCircle className="h-7 w-7" />
           </div>
           <h1 className="t-h1">コンテナを登録しました</h1>
-          <p className="t-sec mt-2">WIP 状態で作成され、監査ログに記録されました。</p>
+          <p className="t-sec mt-2">
+            WIP 状態で作成され、監査ログに記録されました
+            {file && "。ファイルのSHA-256も保存されています。"}
+          </p>
           <div className="mono my-5 rounded-lg p-3 text-sm font-semibold" style={{ background: "var(--surface-2)" }}>
             {identifier}
           </div>
+          {!isDemo && createdContainerId && projectId && (
+            <Link
+              className="app-btn app-btn-ghost app-btn-sm mr-2"
+              to={`/projects/${projectId}/containers/${createdContainerId}`}
+            >
+              コンテナ詳細へ
+            </Link>
+          )}
           <button className="app-btn app-btn-primary" onClick={() => setDone(false)}>
             続けて登録
           </button>
@@ -91,15 +158,29 @@ export default function UploadPage() {
         <p className="t-sec mt-1">ISO 19650-2 命名規則をリアルタイム検証</p>
       </div>
 
+      {error && (
+        <div className="mb-4 flex gap-2 rounded-lg p-3 tone-danger">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <div className="text-[12.5px]">{error}</div>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div className="grid gap-4">
           <div className="app-card-pad">
             <div className="t-h2 mb-3">ファイル</div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              aria-label="ファイル選択"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
             {!file ? (
               <button
                 className="w-full rounded-xl border border-dashed p-8 text-center"
                 style={{ background: "var(--surface-2)", borderColor: "var(--border-strong)" }}
-                onClick={() => setFile({ name: "A-基準階平面.pdf", size: "4.2 MB" })}
+                onClick={() => fileInputRef.current?.click()}
               >
                 <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl app-card">
                   <Upload className="h-5 w-5" style={{ color: "var(--primary)" }} />
@@ -112,10 +193,9 @@ export default function UploadPage() {
                 <FileCheck className="h-8 w-8" style={{ color: "var(--primary)" }} />
                 <div className="flex-1">
                   <div className="text-sm font-semibold">{file.name}</div>
-                  <div className="t-tiny mono">{file.size} · MIME 許可 · SHA-256 検証済み</div>
+                  <div className="t-tiny mono">{formatBytes(file.size)}</div>
                 </div>
-                <span className="app-badge app-badge-sq tone-success"><Check className="h-3 w-3" />完了</span>
-                <button className="app-btn app-btn-ghost app-btn-icon app-btn-sm" onClick={() => setFile(null)}>
+                <button className="app-btn app-btn-ghost app-btn-icon app-btn-sm" onClick={() => setFile(null)} aria-label="ファイルを外す">
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -134,12 +214,13 @@ export default function UploadPage() {
                   <label key={result.key}>
                     <div className="mb-1 truncate text-center text-[10px] font-semibold" style={{ color: "var(--text-3)" }}>{result.label}</div>
                     <input
-                      className="app-field mono text-center font-semibold"
+                      className="mono w-full rounded-lg border bg-transparent px-2 py-1.5 text-center font-semibold"
                       value={result.value}
                       disabled={result.key === "Project"}
                       maxLength={result.key === "Number" ? 4 : 3}
                       onChange={(e) => setSegment(result.key, e.target.value)}
-                      style={{ borderColor: color }}
+                      style={{ borderColor: color, color: "var(--text)" }}
+                      aria-label={`${result.label}セグメント`}
                     />
                     <div className="mt-1 flex items-center justify-center gap-1 text-[9px]" style={{ color }}>
                       {result.status === "pass" ? <Check className="h-2.5 w-2.5" /> : result.status === "warn" ? <AlertTriangle className="h-2.5 w-2.5" /> : <X className="h-2.5 w-2.5" />}
@@ -163,10 +244,48 @@ export default function UploadPage() {
 
           <div className="app-card-pad">
             <div className="t-h2 mb-3">メタデータ</div>
-            <label className="block">
-              <div className="mb-1 text-[12.5px] font-medium" style={{ color: "var(--text-2)" }}>タイトル</div>
-              <input className="app-field" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 9F 基準階平面詳細図" />
-            </label>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="block sm:col-span-1">
+                <div className="mb-1 text-[12.5px] font-medium" style={{ color: "var(--text-2)" }}>タイトル</div>
+                <input
+                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
+                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="例: 9F 基準階平面詳細図"
+                />
+              </label>
+              <label className="block">
+                <div className="mb-1 text-[12.5px] font-medium" style={{ color: "var(--text-2)" }}>種別</div>
+                <select
+                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
+                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                  value={containerType}
+                  onChange={(e) => setContainerType(e.target.value as ContainerType)}
+                >
+                  <option value="document">文書</option>
+                  <option value="drawing">図面</option>
+                  <option value="model">モデル</option>
+                  <option value="ifc">IFC</option>
+                  <option value="bcf">BCF</option>
+                  <option value="other">その他</option>
+                </select>
+              </label>
+              <label className="block">
+                <div className="mb-1 text-[12.5px] font-medium" style={{ color: "var(--text-2)" }}>情報分類</div>
+                <select
+                  className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
+                  style={{ borderColor: "var(--border)", color: "var(--text)" }}
+                  value={securityLevel}
+                  onChange={(e) => setSecurityLevel(e.target.value as SecurityLevel)}
+                >
+                  <option value="public">公開</option>
+                  <option value="limited">限定</option>
+                  <option value="confidential">機密</option>
+                  <option value="restricted">制限付き</option>
+                </select>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -195,12 +314,12 @@ export default function UploadPage() {
 
           <button
             className="app-btn app-btn-primary h-11"
-            disabled={overall === "fail" || !file || !title}
-            onClick={() => setDone(true)}
-            style={overall === "fail" || !file || !title ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+            disabled={overall === "fail" || !file || !title || submitting}
+            onClick={handleSubmit}
+            style={overall === "fail" || !file || !title || submitting ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
           >
             <Plus className="h-4 w-4" />
-            WIP として登録
+            {submitting ? "登録中..." : "WIP として登録"}
           </button>
         </aside>
       </div>

@@ -75,6 +75,74 @@ async def _add_membership(user_id: str, org_id: str) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_my_pending_approvals_with_context(client: AsyncClient):
+    """GET /workflows/tasks/mine returns only tasks awaiting the caller."""
+    org_id, project_id = await _setup_org_project()
+    initiator_token, initiator_id = await _register_and_login(
+        client, "mine_i@example.com", "mineinit"
+    )
+    approver_token, approver_id = await _register_and_login(
+        client, "mine_a@example.com", "mineappr"
+    )
+    await _add_membership(initiator_id, org_id)
+    await _add_membership(approver_id, org_id)
+
+    created = await client.post(
+        f"/api/v1/projects/{project_id}/containers",
+        json={"identifier": "MINE-ORG-ZZ-GF-DR-AR-0001", "title": "Mine Test"},
+        headers={"Authorization": f"Bearer {initiator_token}"},
+    )
+    assert created.status_code == 201
+    container_id = created.json()["id"]
+
+    wf = await client.post(
+        "/api/v1/workflows",
+        json={
+            "project_id": project_id,
+            "target_type": "container",
+            "target_id": container_id,
+            "workflow_type": "state_transition",
+            "assignee_ids": [approver_id],
+        },
+        headers={"Authorization": f"Bearer {initiator_token}"},
+    )
+    assert wf.status_code == 201
+
+    mine = await client.get(
+        "/api/v1/workflows/tasks/mine",
+        headers={"Authorization": f"Bearer {approver_token}"},
+    )
+    assert mine.status_code == 200
+    tasks = mine.json()
+    assert len(tasks) == 1
+    task = tasks[0]
+    assert task["container_identifier"] == "MINE-ORG-ZZ-GF-DR-AR-0001"
+    assert task["container_title"] == "Mine Test"
+    assert task["project_name"] == "Test Project"
+    assert task["approval_stage"] == "stage_1"
+
+    # Initiator has nothing pending.
+    initiator_mine = await client.get(
+        "/api/v1/workflows/tasks/mine",
+        headers={"Authorization": f"Bearer {initiator_token}"},
+    )
+    assert initiator_mine.json() == []
+
+    # After acting, the task disappears from the approver's queue.
+    acted = await client.post(
+        f"/api/v1/workflows/{task['workflow_id']}/approvals/{task['approval_id']}/act",
+        json={"result": "approved", "comment": "ok"},
+        headers={"Authorization": f"Bearer {approver_token}"},
+    )
+    assert acted.status_code == 200
+    mine_after = await client.get(
+        "/api/v1/workflows/tasks/mine",
+        headers={"Authorization": f"Bearer {approver_token}"},
+    )
+    assert mine_after.json() == []
+
+
+@pytest.mark.asyncio
 async def test_start_workflow_requires_membership(client: AsyncClient):
     """User not in org cannot start workflow."""
     token, _ = await _register_and_login(client, "wf1@example.com", "wfuser1")

@@ -121,6 +121,25 @@ async def _resolve_naming_rule(project_id: str, db) -> NamingRule:
     )
 
 
+async def _ensure_unique_identifier(
+    project_id: str, identifier: str, db, exclude_container_id: str | None = None
+) -> None:
+    """Reject duplicate identifiers within a project (excluding self on update)."""
+    q = select(InformationContainer).where(
+        InformationContainer.project_id == project_id,
+        InformationContainer.identifier == identifier,
+        InformationContainer.is_deleted.is_(False),
+    )
+    if exclude_container_id:
+        q = q.where(InformationContainer.id != exclude_container_id)
+    existing = (await db.execute(q)).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Container identifier '{identifier}' already exists in this project",
+        )
+
+
 @router.post("", response_model=ContainerResponse, status_code=status.HTTP_201_CREATED)
 async def create_container(
     request: Request,
@@ -135,6 +154,7 @@ async def create_container(
 
     naming_rule = await _resolve_naming_rule(project_id, db)
     validation = validate_identifier(body.identifier, naming_rule)
+    await _ensure_unique_identifier(project_id, body.identifier, db)
 
     container = InformationContainer(
         project_id=project_id,
@@ -269,6 +289,7 @@ async def update_container(
     current_user: CurrentUser,
     db: DB,
 ) -> ContainerResponse:
+    await _get_project_or_404(project_id, current_user, db)
     result = await db.execute(
         select(InformationContainer).where(
             InformationContainer.id == container_id,
