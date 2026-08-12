@@ -536,6 +536,83 @@ async def test_update_container_requires_auth(client: AsyncClient):
     assert res.status_code == 401
 
 
+@pytest.mark.asyncio
+async def test_update_container_non_member_returns_404(client: AsyncClient):
+    """PATCH by a non-member of the project's org must be denied (IDOR guard)."""
+    from app.models.organization import Organization as OrgModel
+    from tests.conftest import TestSessionLocal
+
+    org_a = str(uuid.uuid4())
+    org_b = str(uuid.uuid4())
+    proj_a = str(uuid.uuid4())
+    async with TestSessionLocal() as session:
+        session.add_all(
+            [
+                OrgModel(id=org_a, name="Org A", slug=f"orga-{org_a[:8]}"),
+                OrgModel(id=org_b, name="Org B", slug=f"orgb-{org_b[:8]}"),
+            ]
+        )
+        await session.commit()
+        session.add(
+            Project(
+                id=proj_a,
+                organization_id=org_a,
+                name="Project A",
+                code="PA-001",
+            )
+        )
+        await session.commit()
+
+    token_a, user_a = await _register_and_login(client, "ida2@example.com", "ida2user")
+    token_b, user_b = await _register_and_login(client, "idb2@example.com", "idb2user")
+    async with TestSessionLocal() as session:
+        session.add_all(
+            [
+                UserOrganization(user_id=user_a, organization_id=org_a),
+                UserOrganization(user_id=user_b, organization_id=org_b),
+            ]
+        )
+        await session.commit()
+
+    created = await client.post(
+        f"/api/v1/projects/{proj_a}/containers",
+        json={"identifier": "PROJ-ORG-ZZ-GF-DR-AR-0001", "title": "Original"},
+        headers={"Authorization": f"Bearer {token_a}"},
+    )
+    assert created.status_code == 201
+    container_id = created.json()["id"]
+
+    res = await client.patch(
+        f"/api/v1/projects/{proj_a}/containers/{container_id}",
+        json={"title": "Tampered"},
+        headers={"Authorization": f"Bearer {token_b}"},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_container_duplicate_identifier_returns_409(
+    client: AsyncClient,
+):
+    """Duplicate identifiers within a project must be rejected."""
+    token, proj_id, _ = await _setup(client, "dup")
+    first = await _create_container(client, token, proj_id)
+    assert first.status_code == 201
+    second = await _create_container(client, token, proj_id)
+    assert second.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_duplicate_identifier_allowed_across_projects(client: AsyncClient):
+    """The same identifier in a different project is allowed."""
+    token, proj_id, _ = await _setup(client, "dup2")
+    token2, proj2_id, _ = await _setup(client, "dup3")
+    first = await _create_container(client, token, proj_id)
+    assert first.status_code == 201
+    second = await _create_container(client, token2, proj2_id)
+    assert second.status_code == 201
+
+
 # ─── Pagination ───────────────────────────────────────────────────────────────
 
 

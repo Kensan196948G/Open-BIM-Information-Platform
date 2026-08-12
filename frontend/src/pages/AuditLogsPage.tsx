@@ -1,25 +1,19 @@
 import { Fragment, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  CheckCircle2,
   ChevronDown,
   ChevronRight,
   Download,
-  Hash,
   Search,
   Shield,
   ShieldCheck,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { auditSamples, userById } from "@/lib/designData";
+import { downloadAuditLogCsv } from "@/api/audit";
+import { userById } from "@/lib/designData";
 import { Avatar, EmptyState, ResultBadge } from "@/components/design/Primitives";
 import { fmtDate } from "@/lib/fmt";
 import type { AuditLog, PaginatedResponse } from "@/types";
-
-function hashStub(id: string) {
-  const n = Number.parseInt(id.replace(/\D/g, ""), 10) || 1;
-  return `0x${((n * 2654435761) % 0xfffffff).toString(16).padStart(7, "0")}`;
-}
 
 const EVENT_GROUP: Record<string, { label: string }> = {
   auth:        { label: "認証" },
@@ -38,7 +32,7 @@ export default function AuditLogsPage() {
   const [group, setGroup]   = useState("all");
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["audit-logs"],
     queryFn: () =>
       api.get<PaginatedResponse<AuditLog>>("/audit-logs").then((r) => r.data),
@@ -58,15 +52,13 @@ export default function AuditLogsPage() {
     reason: log.reason ?? "-",
   }));
 
-  const sourceRows = apiRows?.length ? apiRows : auditSamples;
-
   const groups = useMemo(
-    () => [...new Set(sourceRows.map((r) => r.event.split(".")[0]))],
-    [sourceRows],
+    () => [...new Set((apiRows ?? []).map((r) => r.event.split(".")[0]))],
+    [apiRows],
   );
 
   const rows = useMemo(() => {
-    let next = [...sourceRows];
+    let next = [...(apiRows ?? [])];
     if (result !== "all") next = next.filter((r) => r.result === result);
     if (group !== "all") next = next.filter((r) => r.event.split(".")[0] === group);
     if (q) {
@@ -79,7 +71,7 @@ export default function AuditLogsPage() {
       );
     }
     return next;
-  }, [q, result, group, sourceRows]);
+  }, [q, result, group, apiRows]);
 
   return (
     <div className="mx-auto max-w-[1320px] p-5 sm:p-6">
@@ -97,7 +89,7 @@ export default function AuditLogsPage() {
             <p className="t-sec mt-1">ISO 19650 / J-SOX 準拠 · 改ざん防止 操作証跡</p>
           </div>
         </div>
-        <button className="app-btn">
+        <button className="app-btn" onClick={() => downloadAuditLogCsv()} title="監査ログをCSV出力">
           <Download className="h-4 w-4" />
           CSV エクスポート
         </button>
@@ -113,10 +105,10 @@ export default function AuditLogsPage() {
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">
-            ハッシュチェーン検証済み — 改ざんは検出されませんでした
+            Append-Only 監査ログ
           </div>
           <div className="t-tiny mt-1">
-            Append-Only ログ · PostgreSQL トリガー保護 · 最終検証 2026/05/31 08:00
+            PostgreSQL トリガーにより UPDATE / DELETE を拒否。外部WORM・電子署名は未実装（ロードマップ）
           </div>
         </div>
         <div className="grid grid-cols-3 gap-5 text-right">
@@ -196,7 +188,6 @@ export default function AuditLogsPage() {
                 <th>操作</th>
                 <th>結果</th>
                 <th>IP</th>
-                <th style={{ width: 110 }}>ハッシュ</th>
               </tr>
             </thead>
             <tbody>
@@ -211,8 +202,6 @@ export default function AuditLogsPage() {
                   const user = row.actorId ? userById[row.actorId] : null;
                   const eventGroup = EVENT_GROUP[row.event.split(".")[0]];
                   const isOpen = expanded === row.id;
-                  const prevHash = hashStub(`${row.id}-prev`);
-                  const curHash  = hashStub(row.id);
 
                   return (
                     <Fragment key={row.id}>
@@ -258,18 +247,13 @@ export default function AuditLogsPage() {
                         <td>
                           <span className="mono t-tiny">{row.ip}</span>
                         </td>
-                        <td>
-                          <span className="mono t-tiny" style={{ color: "var(--text-3)" }}>
-                            {curHash}
-                          </span>
-                        </td>
                       </tr>
 
                       {/* inline expanded detail row */}
                       {isOpen && (
                         <tr>
                           <td
-                            colSpan={9}
+                            colSpan={8}
                             style={{ padding: 0, background: "var(--surface-2)" }}
                           >
                             <div
@@ -292,30 +276,6 @@ export default function AuditLogsPage() {
                                 </div>
                               ))}
 
-                              {/* hash chain */}
-                              <div
-                                className="flex items-center gap-2.5"
-                                style={{
-                                  gridColumn: "span 4",
-                                  paddingTop: 10,
-                                  borderTop: "1px solid var(--border)",
-                                }}
-                              >
-                                <CheckCircle2
-                                  className="h-3.5 w-3.5 shrink-0"
-                                  style={{ color: "var(--success-fg)" }}
-                                />
-                                <span className="t-tiny">
-                                  前ハッシュ{" "}
-                                  <span className="mono">{prevHash}</span>
-                                  {" → "}
-                                  現ハッシュ{" "}
-                                  <span className="mono">{curHash}</span>
-                                  {" · "}
-                                  <Hash className="inline h-3 w-3" style={{ color: "var(--success-fg)", verticalAlign: "middle" }} />
-                                  {" "}連鎖整合 OK
-                                </span>
-                              </div>
                             </div>
                           </td>
                         </tr>
@@ -327,7 +287,14 @@ export default function AuditLogsPage() {
             </tbody>
           </table>
         </div>
-        {!isLoading && rows.length === 0 && (
+        {isError && (
+          <EmptyState
+            icon={<Shield className="h-6 w-6" />}
+            title="監査ログを取得できません"
+            sub="監査ログの閲覧はプラットフォーム管理者に限定されています。"
+          />
+        )}
+        {!isLoading && !isError && rows.length === 0 && (
           <EmptyState
             icon={<Search className="h-6 w-6" />}
             title="該当するログがありません"

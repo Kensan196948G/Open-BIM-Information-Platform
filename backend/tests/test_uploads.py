@@ -332,3 +332,123 @@ async def test_upload_then_get_download_url(client: AsyncClient, mock_s3):
     data = dl_res.json()
     assert "download_url" in data
     assert data["expires_in_seconds"] == 3600
+
+
+@needs_moto
+@pytest.mark.asyncio
+async def test_list_files_returns_uploads(client: AsyncClient, mock_s3):
+    """GET /files returns uploaded files with metadata (newest first)."""
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "ul8@ex.com", "ul8")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+
+    for name in ("first.pdf", "second.ifc"):
+        res = await client.post(
+            f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+            headers={"Authorization": f"Bearer {token}"},
+            files={"file": (name, f"content {name}".encode(), "application/pdf")},
+        )
+        assert res.status_code == 201
+
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 2
+    names = [f["original_filename"] for f in data["items"]]
+    assert set(names) == {"first.pdf", "second.ifc"}
+    assert all("checksum_sha256" in f and "storage_key" in f for f in data["items"])
+
+
+@needs_moto
+@pytest.mark.asyncio
+async def test_list_files_non_member_returns_404(client: AsyncClient, mock_s3):
+    """Non-members must not be able to list another org's files."""
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "ul9@ex.com", "ul9")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+
+    outsider_token, _ = await _register_and_login(
+        client, "outsider9@ex.com", "outsider9"
+    )
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files",
+        headers={"Authorization": f"Bearer {outsider_token}"},
+    )
+    assert res.status_code == 404
+
+
+@needs_moto
+@pytest.mark.asyncio
+async def test_delete_file_removes_metadata_and_object(client: AsyncClient, mock_s3):
+    """DELETE /files/{id} removes DB row and object for a WIP container."""
+    from app.models.container import ContainerFile
+    from tests.conftest import TestSessionLocal
+
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "ul10@ex.com", "ul10")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+
+    upload_res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("delete-me.pdf", b"to be deleted", "application/pdf")},
+    )
+    assert upload_res.status_code == 201
+    file_id = upload_res.json()["id"]
+
+    res = await client.delete(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files/{file_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 204
+
+    async with TestSessionLocal() as session:
+        from sqlalchemy import select
+
+        row = (
+            await session.execute(
+                select(ContainerFile).where(ContainerFile.id == file_id)
+            )
+        ).scalar_one_or_none()
+        assert row is None
+
+    listing = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert listing.json()["total"] == 0
+
+
+@needs_moto
+@pytest.mark.asyncio
+async def test_delete_file_non_wip_rejected(client: AsyncClient, mock_s3):
+    """Deleting files from a Shared/Published container must be rejected."""
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "ul11@ex.com", "ul11")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+
+    upload_res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("keep.pdf", b"keep", "application/pdf")},
+    )
+    assert upload_res.status_code == 201
+    file_id = upload_res.json()["id"]
+
+    await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/transition",
+        json={"action": "submit"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    res = await client.delete(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files/{file_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 409

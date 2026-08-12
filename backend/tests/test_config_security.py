@@ -21,6 +21,7 @@ def _strong_production(**overrides) -> Settings:
         "MINIO_ACCESS_KEY": "bim-storage-admin",
         "MINIO_SECRET_KEY": "y" * 24,
         "CORS_ORIGINS": "https://bim.example.com",
+        "ALLOW_SELF_REGISTRATION": False,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -75,6 +76,17 @@ def test_debug_true_rejected_in_production() -> None:
 def test_localhost_cors_rejected_in_production() -> None:
     with pytest.raises(ValidationError, match="CORS_ORIGINS"):
         _strong_production(CORS_ORIGINS="http://localhost:5173")
+
+
+def test_self_registration_rejected_in_production() -> None:
+    """Open self-registration must be explicitly disabled for production."""
+    with pytest.raises(ValidationError, match="ALLOW_SELF_REGISTRATION"):
+        _strong_production(ALLOW_SELF_REGISTRATION=True)
+
+
+def test_self_registration_optional_in_development() -> None:
+    settings = Settings(_env_file=None)
+    assert settings.ALLOW_SELF_REGISTRATION is True
 
 
 def test_development_defaults_remain_permissive(monkeypatch) -> None:

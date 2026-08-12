@@ -8,10 +8,11 @@ import {
   Download,
   FileText,
   Lock,
-  MoreHorizontal,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { deleteFile, getDownloadUrl, listFiles } from "@/api/containers";
 import {
   EmptyState,
   NamingBadge,
@@ -44,7 +45,7 @@ function namingStatus(container: InformationContainer): "pass" | "warn" | "fail"
 
 export default function ContainerDetailPage() {
   const { projectId, containerId } = useParams<{ projectId: string; containerId: string }>();
-  const [tab, setTab] = useState<"overview" | "revisions" | "history">("overview");
+  const [tab, setTab] = useState<"overview" | "files" | "revisions" | "history">("overview");
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["containers", projectId],
@@ -68,6 +69,22 @@ export default function ContainerDetailPage() {
         target_state: targetState,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["containers", projectId] }),
+  });
+  const { data: files = [] } = useQuery({
+    queryKey: ["files", projectId, containerId],
+    queryFn: () => listFiles(projectId!, containerId!),
+    enabled: !!projectId && !!containerId && projectId !== "demo",
+  });
+  const deleteFileMutation = useMutation({
+    mutationFn: (fileId: string) => deleteFile(projectId!, containerId!, fileId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["files", projectId, containerId] });
+      queryClient.invalidateQueries({ queryKey: ["containers", projectId] });
+    },
+  });
+  const downloadMutation = useMutation({
+    mutationFn: (fileId: string) => getDownloadUrl(projectId!, containerId!, fileId),
+    onSuccess: (url) => window.open(url, "_blank", "noopener"),
   });
 
   const sourceItems =
@@ -110,10 +127,6 @@ export default function ContainerDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button className="app-btn"><Download className="h-4 w-4" />ダウンロード</button>
-          <button className="app-btn app-btn-icon"><MoreHorizontal className="h-4 w-4" /></button>
-        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
@@ -149,6 +162,7 @@ export default function ContainerDetailPage() {
             <div className="flex border-b px-2" style={{ borderColor: "var(--border)" }}>
               {[
                 ["overview", "概要・メタデータ"],
+                ["files", `ファイル (${files.length})`],
                 ["revisions", "改訂履歴"],
                 ["history", "状態履歴"],
               ].map(([key, label]) => (
@@ -182,6 +196,56 @@ export default function ContainerDetailPage() {
                     <div className="t-label mb-1">情報分類</div>
                     <SecurityPill level={container.security_level} />
                   </div>
+                </div>
+              )}
+              {tab === "files" && (
+                <div>
+                  {files.length === 0 ? (
+                    <div className="py-8 text-center t-sec">
+                      ファイルがありません。WIP 状態でアップロードできます。
+                    </div>
+                  ) : (
+                    <div className="divide-y" style={{ borderColor: "var(--border-faint)" }}>
+                      {files.map((file) => (
+                        <div key={file.id} className="flex items-center gap-3 py-3">
+                          <FileText className="h-5 w-5 shrink-0" style={{ color: "var(--text-3)" }} />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13px] font-semibold" style={{ color: "var(--text)" }}>
+                              {file.original_filename}
+                            </div>
+                            <div className="t-tiny mono">
+                              {(file.file_size_bytes / 1024).toFixed(1)} KB · {fmtDate(file.created_at, true)}
+                            </div>
+                          </div>
+                          <span className="mono hidden truncate text-[10px] sm:inline" style={{ color: "var(--text-3)" }}>
+                            {file.checksum_sha256.slice(0, 12)}…
+                          </span>
+                          <button
+                            className="app-btn app-btn-ghost app-btn-sm"
+                            disabled={downloadMutation.isPending}
+                            onClick={() => downloadMutation.mutate(file.id)}
+                            aria-label={`${file.original_filename} をダウンロード`}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </button>
+                          {container.current_state === "WIP" && (
+                            <button
+                              className="app-btn app-btn-ghost app-btn-sm"
+                              disabled={deleteFileMutation.isPending}
+                              onClick={() => {
+                                if (window.confirm(`「${file.original_filename}」を削除しますか？`)) {
+                                  deleteFileMutation.mutate(file.id);
+                                }
+                              }}
+                              aria-label={`${file.original_filename} を削除`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" style={{ color: "var(--danger, #dc2626)" }} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {tab === "revisions" && (

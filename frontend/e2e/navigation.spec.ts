@@ -4,45 +4,28 @@ import { test, expect } from "@playwright/test";
 async function authenticate(page: any, baseURL: string) {
   const apiBase = process.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-  // Register test user via API
-  await page.request.post(`${apiBase}/api/v1/auth/register`, {
-    data: {
-      email: "e2e@test.example.com",
-      username: "e2euser",
-      full_name: "E2E Test User",
-      password: "testpass123",
-    },
-  });
-
   // Login via API to get token
   const loginRes = await page.request.post(`${apiBase}/api/v1/auth/login`, {
-    form: { username: "e2e@test.example.com", password: "testpass123" },
+    form: { username: "e2e@test.example.com", password: "TestPass123!" },
   });
   const { access_token } = await loginRes.json();
+  const meRes = await page.request.get(`${apiBase}/api/v1/auth/me`, {
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
+  const me = await meRes.json();
 
   // Set token in localStorage
   await page.goto("/login");
-  await page.evaluate((token: string) => {
-    localStorage.setItem("access_token", token);
-    // Set zustand persisted auth
-    localStorage.setItem(
-      "bim-auth",
-      JSON.stringify({
-        state: {
-          token,
-          user: {
-            id: "test",
-            email: "e2e@test.example.com",
-            username: "e2euser",
-            full_name: "E2E Test User",
-            is_active: true,
-            is_platform_admin: false,
-          },
-        },
-        version: 0,
-      }),
-    );
-  }, access_token);
+  await page.evaluate(
+    ({ token, user }) => {
+      localStorage.setItem("access_token", token);
+      localStorage.setItem(
+        "bim-auth",
+        JSON.stringify({ state: { token, user }, version: 0 }),
+      );
+    },
+    { token: access_token, user: me },
+  );
 
   await page.goto("/dashboard");
 }

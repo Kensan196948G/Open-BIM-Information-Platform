@@ -1,6 +1,11 @@
 from pydantic import BaseModel
 
 
+class FileListResponse(BaseModel):
+    items: list["FileUploadResponse"]
+    total: int
+
+
 class FileUploadResponse(BaseModel):
     id: str
     container_id: str

@@ -9,7 +9,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { api } from "@/lib/api";
-import { demoProject } from "@/lib/designData";
 import {
   Bell,
   Box,
@@ -114,7 +113,7 @@ export default function Layout() {
     return (
       projects?.items.find((p) => p.id === idFromPath) ??
       projects?.items[0] ??
-      demoProject
+      null
     );
   }, [location.pathname, projectId, projects?.items]);
 
@@ -143,12 +142,12 @@ export default function Layout() {
 
   const resolveTo = (to: string) => {
     if (to === "containers") {
-      return activeProject.id
+      return activeProject?.id
         ? `/projects/${activeProject.id}/containers`
         : "/projects";
     }
     if (to === "upload") {
-      return activeProject.id
+      return activeProject?.id
         ? `/projects/${activeProject.id}/upload`
         : "/projects";
     }
@@ -191,19 +190,17 @@ export default function Layout() {
             }}
           >
             <span className="mono flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-xs font-bold text-white">
-              {activeProject.code}
+              {activeProject?.code ?? "BIM"}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[12.5px] font-semibold">
-                {activeProject.name}
+                {activeProject?.name ?? "プロジェクト未選択"}
               </span>
               <span
                 className="block truncate text-[10.5px]"
                 style={{ color: "var(--text-3)" }}
               >
-                {"applied_standard" in activeProject
-                  ? activeProject.applied_standard
-                  : "ISO 19650"}
+                {activeProject?.applied_standard ?? "ISO 19650"}
               </span>
             </span>
             <ChevronsUpDown
@@ -302,7 +299,7 @@ export default function Layout() {
         >
           <div className="min-w-0 flex-1 text-[13px]">
             <span style={{ color: "var(--text-3)" }}>
-              {activeProject.code} · {activeProject.name}
+              {activeProject ? `${activeProject.code} · ${activeProject.name}` : "BIM 情報基盤"}
             </span>
             <span className="mx-2" style={{ color: "var(--text-3)" }}>
               /

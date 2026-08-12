@@ -172,6 +172,39 @@ async def test_oidc_full_login_flow(client: AsyncClient, fake_oidc_provider):
 
 
 @pytest.mark.asyncio
+async def test_oidc_domain_allowlist_blocks_other_domains(
+    client: AsyncClient, fake_oidc_provider, monkeypatch
+):
+    """OIDC login must be rejected when the email domain is not allowed."""
+    monkeypatch.setattr(settings, "OIDC_ALLOWED_DOMAINS", "allowed.example.com")
+    state, payload = await _get_authorize_state(client)
+    code = base64.urlsafe_b64encode(payload["nonce"].encode()).rstrip(b"=").decode()
+
+    res = await client.get(
+        "/api/v1/auth/oidc/callback",
+        params={"code": code, "state": state},
+    )
+    assert res.status_code == 403
+    assert "domain is not permitted" in res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_oidc_domain_allowlist_allows_matching_domain(
+    client: AsyncClient, fake_oidc_provider, monkeypatch
+):
+    """OIDC login succeeds when the email domain is in the allowlist."""
+    monkeypatch.setattr(settings, "OIDC_ALLOWED_DOMAINS", "example.com")
+    state, payload = await _get_authorize_state(client)
+    code = base64.urlsafe_b64encode(payload["nonce"].encode()).rstrip(b"=").decode()
+
+    res = await client.get(
+        "/api/v1/auth/oidc/callback",
+        params={"code": code, "state": state},
+    )
+    assert res.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_oidc_jit_inactive_blocks_login(
     client: AsyncClient, fake_oidc_provider, monkeypatch
 ):

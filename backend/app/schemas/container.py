@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 from app.models.container import ContainerState, ContainerType, SecurityLevel
@@ -33,6 +35,8 @@ class ContainerResponse(BaseModel):
     naming_valid: bool
     naming_issues: str | None
     created_by: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class StateTransitionRequest(BaseModel):

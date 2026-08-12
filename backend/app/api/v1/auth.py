@@ -179,6 +179,11 @@ async def register(
     db: DB,
     _: Annotated[None, Depends(_register_rate_limit)] = None,
 ) -> UserResponse:
+    if not settings.ALLOW_SELF_REGISTRATION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Self-registration is disabled. Contact your administrator.",
+        )
     existing = await db.execute(select(User).where(User.email == body.email))
     if existing.scalar_one_or_none():
         record_audit(

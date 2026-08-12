@@ -3,10 +3,11 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import text as sa_text
 
 from app.api.v1 import (
+    admin,
     audit_logs,
     auth,
     containers,
@@ -21,6 +22,7 @@ from app.api.v1 import (
     workflows,
 )
 from app.core.config import settings
+from app.core.metrics import MetricsMiddleware, render_metrics
 from app.db.base import engine
 
 logger = structlog.get_logger()
@@ -59,9 +61,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(MetricsMiddleware)
 
 API_PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(projects.router, prefix=API_PREFIX)
 app.include_router(containers.router, prefix=API_PREFIX)
 app.include_router(naming_rules.router, prefix=API_PREFIX)
@@ -73,6 +77,14 @@ app.include_router(workflows.router, prefix=API_PREFIX)
 app.include_router(organizations.router, prefix=API_PREFIX)
 app.include_router(requirements.router, prefix=API_PREFIX)
 app.include_router(oidc.router, prefix=API_PREFIX)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> PlainTextResponse:
+    return PlainTextResponse(
+        content=render_metrics(),
+        media_type="text/plain; version=0.0.4",
+    )
 
 
 @app.get("/health")
