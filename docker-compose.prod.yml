@@ -114,6 +114,8 @@ services:
       AV_ENABLED: "true"
       CLAMD_HOST: clamav
       CLAMD_PORT: "3310"
+      RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,9 +127,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    # Single worker: LOGIN_RATE_LIMIT uses an in-process limiter.
-    # Multi-worker deployments must move rate limiting to Redis first.
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+    # Redis-backed rate limiting is shared across workers (default 2).
+    # Increase APP_WORKERS only after confirming Redis availability and
+    # running the smoke load test (scripts/smoke_load_test.py).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${APP_WORKERS:-2}
     healthcheck:
       test:
         [

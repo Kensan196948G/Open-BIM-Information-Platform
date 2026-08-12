@@ -47,7 +47,21 @@ async def main() -> None:
     Session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with Session() as db:
-        # Remove previous seed (idempotent re-runs).
+        # Remove previous seed data (idempotent re-runs).
+        # NOTE: users are reused, not deleted — audit_logs are append-only and
+        # cascade-updates (SET NULL) on user deletion are forbidden by the
+        # immutable trigger. This also keeps the E2E DB stable across runs.
+        existing_users = {}
+        for email in (
+            "approver@e2e.local",
+            "initiator@e2e.local",
+            "e2e@test.example.com",
+        ):
+            user = (
+                await db.execute(select(User).where(User.email == email))
+            ).scalar_one_or_none()
+            existing_users[email] = user
+
         org = (
             await db.execute(select(Organization).where(Organization.slug == "e2e-org"))
         ).scalar_one_or_none()
@@ -91,42 +105,55 @@ async def main() -> None:
                 Organization.__table__.delete().where(Organization.id == org.id)
             )
 
-        for email in (
-            "approver@e2e.local",
-            "initiator@e2e.local",
-            "e2e@test.example.com",
-        ):
-            user = (
-                await db.execute(select(User).where(User.email == email))
-            ).scalar_one_or_none()
-            if user:
-                await db.delete(user)
+        from app.models.notification import Notification
+
+        for user in existing_users.values():
+            if user is not None:
+                await db.execute(
+                    Notification.__table__.delete().where(
+                        Notification.user_id == user.id
+                    )
+                )
+        # Remove stale memberships of reused users (they will be re-added below).
+        reused_ids = [u.id for u in existing_users.values() if u is not None]
+        if reused_ids:
+            await db.execute(
+                UserOrganization.__table__.delete().where(
+                    UserOrganization.user_id.in_(reused_ids)
+                )
+            )
         await db.commit()
 
         org = Organization(id=str(uuid.uuid4()), name="E2E Org", slug="e2e-org")
         db.add(org)
         await db.flush()
 
-        approver = User(
-            id=str(uuid.uuid4()),
-            email="approver@e2e.local",
-            username="approver",
-            full_name="E2E Approver",
-            hashed_password=hash_password(E2E_PASSWORD),
+        def _reuse_or_create(
+            email: str, username: str, full_name: str
+        ) -> User:
+            user = existing_users.get(email)
+            if user is not None:
+                user.username = username
+                user.full_name = full_name
+                user.hashed_password = hash_password(E2E_PASSWORD)
+                user.is_active = True
+                return user
+            return User(
+                id=str(uuid.uuid4()),
+                email=email,
+                username=username,
+                full_name=full_name,
+                hashed_password=hash_password(E2E_PASSWORD),
+            )
+
+        approver = _reuse_or_create(
+            "approver@e2e.local", "approver", "E2E Approver"
         )
-        initiator = User(
-            id=str(uuid.uuid4()),
-            email="initiator@e2e.local",
-            username="initiator",
-            full_name="E2E Initiator",
-            hashed_password=hash_password(E2E_PASSWORD),
+        initiator = _reuse_or_create(
+            "initiator@e2e.local", "initiator", "E2E Initiator"
         )
-        viewer = User(
-            id=str(uuid.uuid4()),
-            email="e2e@test.example.com",
-            username="e2euser",
-            full_name="E2E Test User",
-            hashed_password=hash_password(E2E_PASSWORD),
+        viewer = _reuse_or_create(
+            "e2e@test.example.com", "e2euser", "E2E Test User"
         )
         db.add_all([approver, initiator, viewer])
         await db.flush()

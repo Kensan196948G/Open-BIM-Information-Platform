@@ -12,7 +12,9 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    return bcrypt.hashpw(
+        password.encode(), bcrypt.gensalt(rounds=settings.BCRYPT_ROUNDS)
+    ).decode()
 
 
 def create_access_token(subject: str, expires_delta: timedelta | None = None) -> str:

@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     LOGIN_RATE_WINDOW_SECONDS: int = 60
     REGISTER_RATE_LIMIT: int = 3
     REGISTER_RATE_WINDOW_SECONDS: int = 3600
+    # Redis-backed shared rate limiting (multi-worker safe). The in-process
+    # limiter is used as a short fallback when Redis is unavailable.
+    RATE_LIMIT_BACKEND: str = "redis"
+
+    # bcrypt cost (12 is the OWASP-recommended default)
+    BCRYPT_ROUNDS: int = 12
 
     # Self-registration (production should set false and use admin-invited users)
     ALLOW_SELF_REGISTRATION: bool = True
@@ -100,6 +106,10 @@ class Settings(BaseSettings):
                 "ALLOW_SELF_REGISTRATION must be false when ENVIRONMENT=production "
                 "(users must be provisioned by administrators or OIDC)"
             )
+        if self.BCRYPT_ROUNDS < 10 or self.BCRYPT_ROUNDS > 14:
+            problems.append("BCRYPT_ROUNDS must be between 10 and 14")
+        if self.RATE_LIMIT_BACKEND not in {"redis", "memory"}:
+            problems.append("RATE_LIMIT_BACKEND must be 'redis' or 'memory'")
         if self.SECRET_KEY in WEAK_SECRET_KEYS or len(self.SECRET_KEY) < 32:
             problems.append(
                 "SECRET_KEY is missing, weak, or shorter than 32 characters"
