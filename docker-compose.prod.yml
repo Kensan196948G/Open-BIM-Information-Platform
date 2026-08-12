@@ -60,7 +60,7 @@ services:
     restart: unless-stopped
 
   clamav:
-    image: clamav/clamav:1.6.1
+    image: clamav/clamav:1.5.4
     container_name: bim_clamav
     environment:
       CLAMD_STARTUP_TIMEOUT: "180s"
@@ -85,6 +85,7 @@ services:
       DEBUG: "false"
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bim_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/${POSTGRES_DB:-bim_platform}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
+      ALLOW_SELF_REGISTRATION: ${ALLOW_SELF_REGISTRATION:?ALLOW_SELF_REGISTRATION must be set in .env}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set in .env}
@@ -108,6 +109,7 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
+      ALLOW_SELF_REGISTRATION: ${ALLOW_SELF_REGISTRATION:?ALLOW_SELF_REGISTRATION must be set in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set in .env}
       AV_ENABLED: "true"
       CLAMD_HOST: clamav

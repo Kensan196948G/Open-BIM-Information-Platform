@@ -13,6 +13,7 @@ from app.api.v1 import (
     containers,
     naming,
     naming_rules,
+    notifications,
     oidc,
     organizations,
     projects,
@@ -69,6 +70,7 @@ app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(projects.router, prefix=API_PREFIX)
 app.include_router(containers.router, prefix=API_PREFIX)
 app.include_router(naming_rules.router, prefix=API_PREFIX)
+app.include_router(notifications.router, prefix=API_PREFIX)
 app.include_router(audit_logs.router, prefix=API_PREFIX)
 app.include_router(naming.router, prefix=API_PREFIX)
 app.include_router(rbac.router, prefix=API_PREFIX)

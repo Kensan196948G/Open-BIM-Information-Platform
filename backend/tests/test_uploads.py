@@ -452,3 +452,65 @@ async def test_delete_file_non_wip_rejected(client: AsyncClient, mock_s3):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 409
+
+
+@needs_moto
+@pytest.mark.asyncio
+async def test_upload_creates_revision_record(client: AsyncClient, mock_s3):
+    """Uploads must record a ContainerRevision (Issue #37)."""
+    from sqlalchemy import select
+
+    from app.models.container import ContainerFile, ContainerRevision
+    from tests.conftest import TestSessionLocal
+
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "ul12@ex.com", "ul12")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+
+    upload_res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("rev1.pdf", b"revision one", "application/pdf")},
+    )
+    assert upload_res.status_code == 201
+    file_id = upload_res.json()["id"]
+
+    async with TestSessionLocal() as session:
+        revision = (
+            await session.execute(
+                select(ContainerRevision).where(ContainerRevision.container_id == cid)
+            )
+        ).scalar_one()
+        assert revision.revision_code == "P01"
+        assert revision.version_code == "P01.01"
+        file_row = (
+            await session.execute(
+                select(ContainerFile).where(ContainerFile.id == file_id)
+            )
+        ).scalar_one()
+        assert file_row.revision_id == revision.id
+
+    revisions_res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/revisions",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert revisions_res.status_code == 200
+    revisions = revisions_res.json()
+    assert len(revisions) == 1
+    assert revisions[0]["version_code"] == "P01.01"
+    assert revisions[0]["file"]["original_filename"] == "rev1.pdf"
+
+    # A second upload creates the next version.
+    upload2 = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("rev2.pdf", b"revision two", "application/pdf")},
+    )
+    assert upload2.status_code == 201
+    revisions2 = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/revisions",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    versions = [r["version_code"] for r in revisions2.json()]
+    assert versions == ["P01.02", "P01.01"]

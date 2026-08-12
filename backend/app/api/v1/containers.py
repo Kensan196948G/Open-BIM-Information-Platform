@@ -6,6 +6,8 @@ from sqlalchemy import func, select
 
 from app.core.deps import DB, CurrentUser
 from app.models.container import (
+    ContainerFile,
+    ContainerRevision,
     ContainerState,
     ContainerStateHistory,
     InformationContainer,
@@ -27,6 +29,17 @@ from app.services.naming_validator import (
     _default_iso19650_rule,
     validate_identifier,
 )
+from app.services.notifications import notify_user
+from app.services.rbac import (
+    P_CONTAINER_APPROVE,
+    P_CONTAINER_ARCHIVE,
+    P_CONTAINER_CREATE,
+    P_CONTAINER_RETURN,
+    P_CONTAINER_REVISE,
+    P_CONTAINER_SUBMIT,
+    P_CONTAINER_UPDATE,
+    require_permission,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/containers", tags=["containers"])
 
@@ -38,6 +51,15 @@ VALID_TRANSITIONS: dict[tuple[ContainerState, str], ContainerState] = {
     (ContainerState.published, "revise"): ContainerState.wip,
     (ContainerState.published, "archive"): ContainerState.archived,
     (ContainerState.shared, "archive"): ContainerState.archived,
+}
+
+TRANSITION_PERMISSIONS: dict[tuple[ContainerState, str], str] = {
+    (ContainerState.wip, "submit"): P_CONTAINER_SUBMIT,
+    (ContainerState.shared, "approve"): P_CONTAINER_APPROVE,
+    (ContainerState.shared, "return"): P_CONTAINER_RETURN,
+    (ContainerState.published, "revise"): P_CONTAINER_REVISE,
+    (ContainerState.published, "archive"): P_CONTAINER_ARCHIVE,
+    (ContainerState.shared, "archive"): P_CONTAINER_ARCHIVE,
 }
 
 
@@ -73,18 +95,25 @@ async def list_containers(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     state: ContainerState | None = None,
+    q: str | None = Query(None, max_length=200),
 ) -> ContainerListResponse:
     await _get_project_or_404(project_id, current_user, db)
-    q = select(InformationContainer).where(
+    query = select(InformationContainer).where(
         InformationContainer.project_id == project_id,
         InformationContainer.is_deleted.is_(False),
     )
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.where(
+            InformationContainer.identifier.ilike(like)
+            | InformationContainer.title.ilike(like)
+        )
     if state:
-        q = q.where(InformationContainer.current_state == state)
+        query = query.where(InformationContainer.current_state == state)
     total = (
-        await db.execute(select(func.count()).select_from(q.subquery()))
+        await db.execute(select(func.count()).select_from(query.subquery()))
     ).scalar_one()
-    result = await db.execute(q.offset((page - 1) * size).limit(size))
+    result = await db.execute(query.offset((page - 1) * size).limit(size))
     items = result.scalars().all()
     return ContainerListResponse(
         items=[ContainerResponse.model_validate(c) for c in items],
@@ -148,9 +177,13 @@ async def create_container(
     current_user: CurrentUser,
     db: DB,
 ) -> ContainerResponse:
-    await _get_project_or_404(project_id, current_user, db)
-    org_result = await db.execute(select(Project).where(Project.id == project_id))
-    project = org_result.scalar_one()
+    project = await _get_project_or_404(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_CONTAINER_CREATE,
+    )
 
     naming_rule = await _resolve_naming_rule(project_id, db)
     validation = validate_identifier(body.identifier, naming_rule)
@@ -207,6 +240,59 @@ async def get_container(
     return ContainerResponse.model_validate(container)
 
 
+@router.get("/{container_id}/revisions")
+async def list_container_revisions(
+    project_id: str,
+    container_id: str,
+    current_user: CurrentUser,
+    db: DB,
+) -> list[dict]:
+    """Return revision history (with linked file metadata) for a container."""
+    await _get_project_or_404(project_id, current_user, db)
+    result = await db.execute(
+        select(InformationContainer).where(
+            InformationContainer.id == container_id,
+            InformationContainer.project_id == project_id,
+            InformationContainer.is_deleted.is_(False),
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Container not found"
+        )
+    rows = await db.execute(
+        select(ContainerRevision, ContainerFile)
+        .outerjoin(
+            ContainerFile,
+            ContainerFile.id == ContainerRevision.file_id,
+        )
+        .where(ContainerRevision.container_id == container_id)
+        .order_by(ContainerRevision.created_at.desc())
+    )
+    return [
+        {
+            "id": revision.id,
+            "revision_code": revision.revision_code,
+            "version_code": revision.version_code,
+            "change_reason": revision.change_reason,
+            "change_summary": revision.change_summary,
+            "created_by": revision.created_by,
+            "created_at": revision.created_at.isoformat()
+            if revision.created_at
+            else None,
+            "file": {
+                "id": file.id,
+                "original_filename": file.original_filename,
+                "file_size_bytes": file.file_size_bytes,
+                "checksum_sha256": file.checksum_sha256,
+            }
+            if file
+            else None,
+        }
+        for revision, file in rows.all()
+    ]
+
+
 @router.post("/{container_id}/transition", response_model=ContainerResponse)
 async def transition_state(
     request: Request,
@@ -216,7 +302,7 @@ async def transition_state(
     current_user: CurrentUser,
     db: DB,
 ) -> ContainerResponse:
-    await _get_project_or_404(project_id, current_user, db)
+    project = await _get_project_or_404(project_id, current_user, db)
     # Lock the container row to serialize with the workflow reject/revert path
     result = await db.execute(
         select(InformationContainer)
@@ -232,6 +318,19 @@ async def transition_state(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Container not found"
         )
+
+    permission_code = TRANSITION_PERMISSIONS.get((container.current_state, body.action))
+    if permission_code is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Invalid transition: {container.current_state} + action '{body.action}'",
+        )
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=permission_code,
+    )
 
     # Compute next state from the freshly-locked current state
     key = (container.current_state, body.action)
@@ -261,6 +360,17 @@ async def transition_state(
     )
     container.current_state = next_state
     db.add(history)
+    if next_state in (ContainerState.published, ContainerState.archived) or (
+        next_state == ContainerState.wip and body.action == "return"
+    ):
+        notify_user(
+            db,
+            user_id=container.created_by,
+            event_type="container.state_changed",
+            title=f"コンテナ状態が変更されました（{next_state.value}）",
+            body=f"{container.identifier}: action={body.action}",
+            link=f"/projects/{project_id}/containers/{container.id}",
+        )
     record_audit(
         db,
         event_type="container.state_changed",
@@ -289,7 +399,13 @@ async def update_container(
     current_user: CurrentUser,
     db: DB,
 ) -> ContainerResponse:
-    await _get_project_or_404(project_id, current_user, db)
+    project = await _get_project_or_404(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_CONTAINER_UPDATE,
+    )
     result = await db.execute(
         select(InformationContainer).where(
             InformationContainer.id == container_id,

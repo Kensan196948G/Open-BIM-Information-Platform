@@ -45,13 +45,18 @@ async def _register_and_login(
     return res.json()["access_token"], user_id
 
 
-async def _add_membership(user_id: str, org_id: str) -> None:
+async def _add_membership(
+    user_id: str, org_id: str, role: str = "member", is_org_admin: bool = False
+) -> None:
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as session:
         session.add(
             UserOrganization(
-                user_id=user_id, organization_id=org_id, role_in_org="member"
+                user_id=user_id,
+                organization_id=org_id,
+                role_in_org=role,
+                is_org_admin=is_org_admin,
             )
         )
         await session.commit()
@@ -63,7 +68,8 @@ async def _setup(client: AsyncClient, suffix: str = "0") -> tuple[str, str]:
     token, user_id = await _register_and_login(
         client, f"pj{suffix}@example.com", f"pjuser{suffix}"
     )
-    await _add_membership(user_id, org_id)
+    # Project create/update are organization-admin operations in the RBAC model.
+    await _add_membership(user_id, org_id, role="org_admin", is_org_admin=True)
     return token, org_id
 
 
@@ -181,6 +187,48 @@ async def test_create_project_no_membership_returns_403(client: AsyncClient):
         "/api/v1/projects",
         json={"name": "Orphan", "code": "OR-001"},
         headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_create_project_member_returns_403(client: AsyncClient):
+    """A plain member must not be able to create projects (RBAC)."""
+    org_id = await _create_org("Org member-denied")
+    token, user_id = await _register_and_login(client, "memdeny@example.com", "memdeny")
+    await _add_membership(user_id, org_id, role="member")
+    res = await client.post(
+        "/api/v1/projects",
+        json={"name": "Blocked", "code": "BL-001"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_update_project_member_returns_403(client: AsyncClient):
+    """A plain member must not be able to update projects (RBAC)."""
+    org_id = await _create_org("Org member-denied-2")
+    admin_token, admin_id = await _register_and_login(
+        client, "memdeny_admin@example.com", "memdenyadmin"
+    )
+    await _add_membership(admin_id, org_id, role="org_admin", is_org_admin=True)
+    project_res = await client.post(
+        "/api/v1/projects",
+        json={"name": "Admin Project", "code": "AD-001"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert project_res.status_code == 201
+    project_id = project_res.json()["id"]
+
+    member_token, member_id = await _register_and_login(
+        client, "memdeny2@example.com", "memdeny2"
+    )
+    await _add_membership(member_id, org_id, role="member")
+    res = await client.patch(
+        f"/api/v1/projects/{project_id}",
+        json={"name": "Tampered"},
+        headers={"Authorization": f"Bearer {member_token}"},
     )
     assert res.status_code == 403
 

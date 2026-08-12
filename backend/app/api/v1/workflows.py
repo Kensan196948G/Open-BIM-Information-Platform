@@ -24,6 +24,8 @@ from app.models.workflow import (
     WorkflowTask,
 )
 from app.services.audit import enum_value, record_audit
+from app.services.notifications import notify_user
+from app.services.rbac import P_WORKFLOW_START, require_permission
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
@@ -221,6 +223,12 @@ async def start_workflow(
     db: DB,
 ) -> WorkflowResponse:
     project = await _require_project_member(body.project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_WORKFLOW_START,
+    )
     await _validate_target(body.target_type, body.target_id, body.project_id, db)
     if body.assignee_ids:
         await _validate_assignees(body.assignee_ids, project.organization_id, db)
@@ -256,6 +264,14 @@ async def start_workflow(
         )
         db.add(task)
         db.add(approval)
+        notify_user(
+            db,
+            user_id=assignee_id,
+            event_type="workflow.assigned",
+            title="承認依頼が届きました",
+            body=f"「{body.workflow_type}」の承認依頼です。コメント: {body.comment or 'なし'}",
+            link=f"/approvals?workflow={workflow.id}",
+        )
 
     record_audit(
         db,
@@ -389,6 +405,18 @@ async def act_on_approval(
                 db.add(history)
     elif all_approved:
         workflow.status = WorkflowStatus.completed
+
+    notify_user(
+        db,
+        user_id=workflow.initiated_by,
+        event_type="workflow.result",
+        title="承認結果の通知",
+        body=(
+            f"承認結果: {enum_value(workflow.status)} "
+            f"（{body.comment or 'コメントなし'}）"
+        ),
+        link=f"/approvals?workflow={workflow.id}",
+    )
 
     record_audit(
         db,

@@ -3,17 +3,23 @@ import uuid
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.config import settings
 from app.core.deps import DB, CurrentUser
-from app.models.container import ContainerFile, ContainerState, InformationContainer
+from app.models.container import (
+    ContainerFile,
+    ContainerRevision,
+    ContainerState,
+    InformationContainer,
+)
 from app.models.project import Project
 from app.models.user import UserOrganization
 from app.schemas.upload import FileListResponse, FileUploadResponse
 from app.services import storage as storage_svc
 from app.services.audit import enum_value, record_audit
 from app.services.av_scan import scan_bytes
+from app.services.rbac import P_FILE_DELETE, P_FILE_UPLOAD, require_permission
 
 router = APIRouter(
     prefix="/projects/{project_id}/containers/{container_id}", tags=["uploads"]
@@ -162,6 +168,14 @@ async def upload_file(
     db: DB,
 ) -> FileUploadResponse:
     container = await _get_container_or_403(project_id, container_id, current_user, db)
+    proj_result = await db.execute(select(Project).where(Project.id == project_id))
+    project = proj_result.scalar_one()
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_FILE_UPLOAD,
+    )
 
     if container.current_state != ContainerState.wip:
         raise HTTPException(
@@ -223,6 +237,26 @@ async def upload_file(
         checksum_sha256=sha256,
         uploaded_by=current_user.id,
     )
+    revision_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(ContainerRevision)
+            .where(ContainerRevision.container_id == container_id)
+        )
+    ).scalar_one()
+    revision = ContainerRevision(
+        id=str(uuid.uuid4()),
+        container_id=container_id,
+        file_id=container_file.id,
+        revision_code=container.current_revision,
+        version_code=f"{container.current_revision}.{revision_count + 1:02d}",
+        change_reason=None,
+        change_summary=None,
+        created_by=current_user.id,
+    )
+    db.add(revision)
+    await db.flush()  # revision must exist before container_files.revision_id FK
+    container_file.revision_id = revision.id
     db.add(container_file)
     record_audit(
         db,
@@ -302,6 +336,14 @@ async def delete_file(
 ) -> None:
     """Delete a file from a WIP container (metadata + object + audit trail)."""
     container = await _get_container_or_403(project_id, container_id, current_user, db)
+    proj_result = await db.execute(select(Project).where(Project.id == project_id))
+    project = proj_result.scalar_one()
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_FILE_DELETE,
+    )
     if container.current_state != ContainerState.wip:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

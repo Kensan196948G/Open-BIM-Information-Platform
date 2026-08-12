@@ -5,6 +5,7 @@ from app.models.container import (
     ContainerStateHistory,
     InformationContainer,
 )
+from app.models.notification import Notification
 from app.models.organization import Organization
 from app.models.project import Project, ProjectMember
 from app.models.requirements import RequirementItem, RequirementsDocument
@@ -33,4 +34,5 @@ __all__ = [
     "Approval",
     "AuditLog",
     "RevokedToken",
+    "Notification",
 ]

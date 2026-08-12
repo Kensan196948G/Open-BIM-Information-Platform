@@ -66,3 +66,67 @@
 - RBAC のエンドポイント権限強制（ロール⇔API）
 - 通知・検索・版管理・データ移行（Phase 1-2）
 - 本番環境・Secrets 提供（Issue #31）
+
+---
+
+# 追記（2026-08-12 夜間: Phase 1 スライス実施）
+
+## 1. RBAC エンドポイント権限強制（Issue #36）
+
+- `app/services/rbac.py` を追加。システムロール（member / reviewer / org_admin）と
+  権限コードを定義し、`has_permission` / `require_permission` を実装。
+- シードマイグレーション（9a8b7c6d5e4f）: 17 権限・3 システムロール・41 紐付けを
+  冪等に投入（PostgreSQL で upgrade→downgrade→upgrade 検証済み）。
+- 適用エンドポイント:
+  - コンテナ: create/update/submit/approve/return/revise/archive
+  - ファイル: upload/delete
+  - ワークフロー: start（act は担当者割当ベースの従来制御を維持）
+  - プロジェクト: create/update（組織管理者以上）
+  - 命名規則: manage（組織管理者以上）
+  - 要求文書: read / manage
+- 職務分掌: member は approve/return/archive 不可（403）。テスト
+  `test_rbac_enforcement.py` で分離を実証。
+- 既存テストはロールを明示（reviewer / org_admin）する形に更新。
+
+## 2. アプリ内通知（Issue #34 垂直スライス）
+
+- `notifications` テーブル＋API:
+  - GET /api/v1/notifications（一覧・未読件数）
+  - POST /api/v1/notifications/{id}/read
+  - POST /api/v1/notifications/read-all
+- 通知トリガー: ワークフロー開始（承認者へ依頼）、承認結果（発議者へ）、
+  コンテナ状態変更（作成者へ）。
+- UI: ヘッダーのベルアイコンに未読バッジ、/notifications ページ（既読/全既読）。
+- テスト 3 件（発火・既読・ユーザースコープ）。
+
+## 3. 検索と版管理（Issue #37 スライス）
+
+- 検索: `GET /projects/{id}/containers?q=`（識別子/タイトル部分一致）、
+  `GET /projects/{id}/requirements?q=`。ContainersPage に検索ボックス接続。
+- 版管理: アップロード時に `ContainerRevision`（revision_code=P01,
+  version_code=P01.01, P01.02…）を自動記録し、ファイルと紐付け。
+  `GET /containers/{id}/revisions` で履歴取得。コンテナ詳細の「改訂履歴」タブを実データ化。
+- テスト 3 件（検索 2・リビジョン 1）。
+
+## 4. 検証（本番構成ステージング・QA）
+
+- 本番 Compose（docker-compose.prod.yml + ポート分離オーバーレイ、.env.staging に
+  `DEBUG=false` / `ALLOW_SELF_REGISTRATION=false` を追記）をローカルで起動。
+  PostgreSQL / Redis / MinIO / ClamAV / migrate / backend / frontend 全 healthy。
+- 発見・修正: migrate/backend サービスに `ALLOW_SELF_REGISTRATION` の引き渡しがなく
+  起動ガードで失敗 → compose に必須 env として追加。
+- スモーク: /health OK・ログイン・/me・プロジェクト一覧・RBAC（member approve → 403）確認。
+- 負荷試験（scripts/smoke_load_test.py、25 ユーザー×8 反復）:
+  - login p50 8.3s / p95 11.5s（bcrypt cost 12 + workers=1 + 共有ホストの CPU 競合。
+    本番では Redis 共有レート制限と workers 増、または bcrypt ラウンド調整を要検討）
+  - projects/tasks/notifications p50 約 93〜116ms / p95 約 160〜285ms、エラー 0
+  - ログイン 25 並列時のレート制限（デフォルト 5/60s/IP）が意図通り動作することを確認
+- バックアップ→復元演習: backup.sh で暗号化バンドル作成 → restore-drill.sh で
+  projects=1 / containers=3 / audit_logs=55 復元・immutable トリガー確認・所要 13 秒。
+
+## 残課題（Phase 1 次スライス）
+
+- メール通知（Exchange Online/SMTP）と通知設定 UI
+- 検索の全文検索化（pg_trgm 類似度・ファイル名検索）
+- リビジョン確定（approve 時）と差分表示・変更理由の入力 UI
+- パフォーマンス: Redis 共有レート制限 + workers 増、負荷試験の本番相当実施
