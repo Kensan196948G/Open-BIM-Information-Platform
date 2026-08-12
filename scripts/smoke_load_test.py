@@ -32,6 +32,15 @@ async def worker(
                 "/api/v1/auth/login",
                 data={"username": email, "password": password},
             )
+            if login.status_code != 200:
+                results.append(
+                    {
+                        "op": "login",
+                        "latency": (time.perf_counter() - login_start) * 1000,
+                        "status": login.status_code,
+                    }
+                )
+                return
             token = login.json()["access_token"]
             headers = {"Authorization": f"Bearer {token}"}
             results.append(

@@ -61,6 +61,10 @@ async def override_get_db():
 @pytest.fixture(autouse=True)
 async def setup_db(request):
     rate_limiter.clear()
+    # Deterministic tests: never depend on a local Redis instance.
+    from app.core.config import settings
+
+    settings.RATE_LIMIT_BACKEND = "memory"
     if request.node.get_closest_marker("no_db"):
         yield
         return

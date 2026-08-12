@@ -130,3 +130,42 @@
 - 検索の全文検索化（pg_trgm 類似度・ファイル名検索）
 - リビジョン確定（approve 時）と差分表示・変更理由の入力 UI
 - パフォーマンス: Redis 共有レート制限 + workers 増、負荷試験の本番相当実施
+
+---
+
+# 追記 2（2026-08-12 深夜: パフォーマンス対応・本番展開準備）
+
+## 1. Redis 共有レート制限＋workers 増（ログイン p95 11.5s の解消）
+
+- `app/core/ratelimit.py` を Redis（ZSET スライディングウィンドウ）対応に変更。
+  Redis 断時は 30 秒間インメモリへ縮退（設定 `RATE_LIMIT_BACKEND=redis|memory`）。
+- 設定追加: `RATE_LIMIT_BACKEND` / `BCRYPT_ROUNDS`（既定12・本番ガードで10〜14を強制）/
+  `APP_WORKERS`（本番Compose既定2、負荷試験は4で実施）。
+- テスト 7 件追加（Redis 許可/拒否/フォールバック/メモリモード/スライディングウィンドウ/
+  本番ガード2件）。バックエンド 294 passed。
+
+### 負荷試験（本番構成ステージング、25 ユーザー×8 反復）
+
+| 指標 | workers=1（前回） | workers=4（今回） |
+|---|---:|---:|
+| login p50 | 8,263 ms | **3,450 ms** |
+| login p95 | 11,530 ms | **4,454 ms** |
+| health p50 | 148 ms | **19 ms** |
+| projects p95 | 285 ms | **73 ms** |
+| tasks p95 | 191 ms | **64 ms** |
+
+- 共有レート制限の実証: 4 worker・制限5回/60秒で 25 並列ログイン → **200×5 / 429×20**。
+  （インメモリ方式なら 4 worker で約20件成功してしまうため、Redis 共有の効果を確認）
+- 残課題: bcrypt cost 12 は CPU 依存のため、さらに短縮する場合は 10〜11 への調整と
+  セキュリティレビューが必要。600名規模の朝ログインバーストを想定した本番相当試験を推奨。
+
+## 2. 本番展開準備（Issue #31 のうち可能な範囲）
+
+- GitHub `production` 環境を作成（デプロイ承認ゲートの土台）。Secrets は未設定のまま。
+- `docs/PRODUCTION_DEPLOYMENT.md` に Cloudflare Pages / Neon 作成・Secrets 設定・
+  レビュアー追加の手順を追記。
+- 確認結果: `gh secret list` 空・`open-bim.mirai-dx-platform.com` の DNS 未登録・
+  Cloudflare/Neon CLI は認証済み。**ドメイン・Secrets・監視通知先の提供と、
+  Neon/Cloudflare 資源作成の承認が得られ次第、deploy.yml で展開可能**。
+- 補足: 本番Composeには `APP_WORKERS` / `RATE_LIMIT_BACKEND` / `BCRYPT_ROUNDS` を
+  環境変数で受け渡す設定を追加。

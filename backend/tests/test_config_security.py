@@ -84,6 +84,16 @@ def test_self_registration_rejected_in_production() -> None:
         _strong_production(ALLOW_SELF_REGISTRATION=True)
 
 
+def test_invalid_bcrypt_rounds_rejected_in_production() -> None:
+    with pytest.raises(ValidationError, match="BCRYPT_ROUNDS"):
+        _strong_production(BCRYPT_ROUNDS=8)
+
+
+def test_invalid_rate_limit_backend_rejected_in_production() -> None:
+    with pytest.raises(ValidationError, match="RATE_LIMIT_BACKEND"):
+        _strong_production(RATE_LIMIT_BACKEND="file")
+
+
 def test_self_registration_optional_in_development() -> None:
     settings = Settings(_env_file=None)
     assert settings.ALLOW_SELF_REGISTRATION is True

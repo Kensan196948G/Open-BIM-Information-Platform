@@ -27,12 +27,44 @@ neonctl connection-string --project-id <project-id> --branch main --role bim_use
 
 ## 3. GitHub Secrets 設定
 
+> 2026-08-12 時点: `production` 環境は作成済み（デプロイ承認ゲートの土台）。
+> Secrets は未設定（`gh secret list` 空）。以下のコマンドで設定する。
+
 ```bash
 gh secret set PROD_HOST
 gh secret set PROD_USER
 gh secret set PROD_SSH_KEY < key.pem
 gh secret set PROD_DIR
 ```
+
+`production` 環境に「必要なレビュアー」を追加すると、本番デプロイに人間承認が必要になる
+（推奨: 技術責任者・セキュリティ担当 各1名）。
+
+```bash
+# 例: 承認者（ユーザー名）を指定
+gh api -X PUT repos/Kensan196948G/Open-BIM-Information-Platform/environments/production \
+  -f reviewers='[{"type":"User","id":<user-id>}]' 2>/dev/null || echo "レビュアー設定はWeb UIでも可"
+```
+
+### Cloudflare Pages（検証/公開基盤）作成手順（承認後）
+
+```bash
+wrangler pages project create open-bim
+# デプロイ（プレビューURLは open-bim.pages.dev で即利用可）
+wrangler pages deploy frontend/dist --project-name open-bim
+# 本番ドメイン（例: open-bim.mirai-dx-platform.com）は Cloudflare ゾーンのDNS追加後に
+# Pages > Custom domains で設定
+```
+
+### Neon PostgreSQL（DB正本）作成手順（承認後）
+
+```bash
+neonctl projects create --name open-bim-information-platform \
+  --org-id org-little-violet-74140600
+neonctl connection-string --project-id <project-id> --branch main --role bim_user
+```
+
+接続文字列は `DATABASE_URL` として本番 `.env` と GitHub Secrets に設定する。
 
 ## 4. デプロイ
 
