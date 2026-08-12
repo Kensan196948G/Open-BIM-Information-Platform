@@ -12,7 +12,12 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { deleteFile, getDownloadUrl, listFiles } from "@/api/containers";
+import {
+  deleteFile,
+  getDownloadUrl,
+  listContainerRevisions,
+  listFiles,
+} from "@/api/containers";
 import {
   EmptyState,
   NamingBadge,
@@ -85,6 +90,11 @@ export default function ContainerDetailPage() {
   const downloadMutation = useMutation({
     mutationFn: (fileId: string) => getDownloadUrl(projectId!, containerId!, fileId),
     onSuccess: (url) => window.open(url, "_blank", "noopener"),
+  });
+  const { data: revisions = [] } = useQuery({
+    queryKey: ["revisions", projectId, containerId],
+    queryFn: () => listContainerRevisions(projectId!, containerId!),
+    enabled: !!projectId && !!containerId && projectId !== "demo",
   });
 
   const sourceItems =
@@ -249,11 +259,39 @@ export default function ContainerDetailPage() {
                 </div>
               )}
               {tab === "revisions" && (
-                <div className="flex items-center gap-3">
-                  <span className="mono w-16 text-sm font-semibold">{container.current_revision}</span>
-                  <StatePill state={container.current_state} />
-                  <span className="t-sec flex-1">現行版</span>
-                  <span className="t-tiny">{fmtDate(new Date().toISOString(), true)}</span>
+                <div>
+                  {revisions.length === 0 ? (
+                    <div className="py-8 text-center t-sec">
+                      改訂履歴はありません。ファイルをアップロードすると記録されます。
+                    </div>
+                  ) : (
+                    <div className="divide-y" style={{ borderColor: "var(--border-faint)" }}>
+                      {revisions.map((revision, index) => (
+                        <div key={revision.id} className="flex items-center gap-3 py-3">
+                          <span className="mono w-20 shrink-0 rounded-lg px-2 py-1 text-center text-xs font-semibold"
+                            style={{
+                              background: index === 0 ? "var(--primary-subtle)" : "var(--surface-2)",
+                              color: index === 0 ? "var(--primary-text)" : "var(--text-2)",
+                            }}
+                          >
+                            {revision.version_code}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13px] font-semibold" style={{ color: "var(--text)" }}>
+                              {revision.file?.original_filename ?? "（ファイルなし）"}
+                            </div>
+                            <div className="t-tiny">
+                              {revision.change_reason ?? "変更理由なし"} ·{" "}
+                              {revision.created_at ? fmtDate(revision.created_at, true) : "-"}
+                            </div>
+                          </div>
+                          {index === 0 && (
+                            <span className="app-badge app-badge-sq tone-success">現行版</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {tab === "history" && (

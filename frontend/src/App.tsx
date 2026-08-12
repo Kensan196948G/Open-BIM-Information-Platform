@@ -10,6 +10,7 @@ import UploadPage from "@/pages/UploadPage";
 import ApprovalsPage from "@/pages/ApprovalsPage";
 import RequirementsPage from "@/pages/RequirementsPage";
 import NamingRulesPage from "@/pages/NamingRulesPage";
+import NotificationsPage from "@/pages/NotificationsPage";
 import RBACPage from "@/pages/RBACPage";
 import SettingsPage from "@/pages/SettingsPage";
 import Layout from "@/components/Layout";
@@ -48,6 +49,7 @@ export default function App() {
           element={<NamingRulesPage />}
         />
         <Route path="approvals" element={<ApprovalsPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
         <Route path="requirements" element={<RequirementsPage />} />
         <Route path="audit-logs" element={<AuditLogsPage />} />
         <Route path="settings/roles" element={<RBACPage />} />

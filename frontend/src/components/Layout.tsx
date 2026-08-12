@@ -1,4 +1,5 @@
 import {
+  Link,
   Outlet,
   NavLink,
   useLocation,
@@ -9,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { api } from "@/lib/api";
+import { listNotifications } from "@/api/notifications";
 import {
   Bell,
   Box,
@@ -106,6 +108,12 @@ export default function Layout() {
     queryFn: () =>
       api.get<PaginatedResponse<Project>>("/projects").then((r) => r.data),
   });
+  const { data: notificationData } = useQuery({
+    queryKey: ["notifications-summary"],
+    queryFn: () => listNotifications({ size: 1 }),
+    refetchInterval: 60_000,
+  });
+  const unreadCount = notificationData?.unread_count ?? 0;
 
   const activeProject = useMemo(() => {
     const idFromPath =
@@ -336,9 +344,21 @@ export default function Layout() {
               <Moon className="h-4 w-4" />
             )}
           </button>
-          <button className="app-btn app-btn-ghost app-btn-icon" title="通知">
+          <Link
+            className="app-btn app-btn-ghost app-btn-icon relative"
+            to="/notifications"
+            title="通知"
+            aria-label={`通知（未読${unreadCount}件）`}
+          >
             <Bell className="h-4 w-4" />
-          </button>
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
+                style={{ background: "var(--danger, #dc2626)" }}
+              >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </Link>
         </header>
 
         <main className="flex-1 overflow-auto">

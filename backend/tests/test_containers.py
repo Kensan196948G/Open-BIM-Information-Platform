@@ -59,14 +59,17 @@ async def _register_and_login(
     return res.json()["access_token"], user_id
 
 
-async def _add_membership(user_id: str, org_id: str) -> None:
+async def _add_membership(
+    user_id: str, org_id: str, role: str = "member", is_org_admin: bool = False
+) -> None:
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as session:
         membership = UserOrganization(
             user_id=user_id,
             organization_id=org_id,
-            role_in_org="member",
+            role_in_org=role,
+            is_org_admin=is_org_admin,
         )
         session.add(membership)
         await session.commit()
@@ -79,6 +82,18 @@ async def _setup(client: AsyncClient, suffix: str = "0") -> tuple[str, str, str]
         client, f"ct{suffix}@example.com", f"ctuser{suffix}"
     )
     await _add_membership(user_id, org_id)
+    return token, proj_id, user_id
+
+
+async def _setup_reviewer(
+    client: AsyncClient, suffix: str = "0"
+) -> tuple[str, str, str]:
+    """Org + project + reviewer user. Returns (token, proj_id, user_id)."""
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(
+        client, f"rv{suffix}@example.com", f"rvuser{suffix}"
+    )
+    await _add_membership(user_id, org_id, role="reviewer")
     return token, proj_id, user_id
 
 
@@ -144,6 +159,42 @@ async def test_list_containers_state_filter(client: AsyncClient):
     )
     assert res.status_code == 200
     assert res.json()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_containers_search_q(client: AsyncClient):
+    """q filters containers by identifier/title substring (Issue #37)."""
+    token, proj_id, _ = await _setup(client, "q1")
+    await _create_container(
+        client,
+        token,
+        proj_id,
+        identifier="PROJ-ORG-ZZ-GF-DR-AR-0001",
+        title="橋梁一般図",
+    )
+    await _create_container(
+        client,
+        token,
+        proj_id,
+        identifier="PROJ-ORG-ZZ-GF-DR-AR-0002",
+        title="擁壁詳細図",
+    )
+
+    by_identifier = await client.get(
+        f"/api/v1/projects/{proj_id}/containers",
+        params={"q": "0002"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert by_identifier.status_code == 200
+    assert by_identifier.json()["total"] == 1
+
+    by_title = await client.get(
+        f"/api/v1/projects/{proj_id}/containers",
+        params={"q": "橋梁"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert by_title.json()["total"] == 1
+    assert by_title.json()["items"][0]["title"] == "橋梁一般図"
 
 
 # ─── Create container ─────────────────────────────────────────────────────────
@@ -251,7 +302,7 @@ async def test_transition_wip_to_shared(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_transition_shared_to_published(client: AsyncClient):
     """shared container + action=approve → state becomes published."""
-    token, proj_id, _ = await _setup(client, "11")
+    token, proj_id, _ = await _setup_reviewer(client, "11")
     container_id = (await _create_container(client, token, proj_id)).json()["id"]
 
     await client.post(
@@ -271,7 +322,7 @@ async def test_transition_shared_to_published(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_transition_shared_to_wip_via_return(client: AsyncClient):
     """shared container + action=return → state reverts to wip."""
-    token, proj_id, _ = await _setup(client, "12")
+    token, proj_id, _ = await _setup_reviewer(client, "12")
     container_id = (await _create_container(client, token, proj_id)).json()["id"]
     await client.post(
         f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
@@ -421,7 +472,7 @@ async def test_list_containers_unauthenticated(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_transition_published_to_archived(client: AsyncClient):
     """Full CDE lifecycle: WIP → Shared → Published → Archived."""
-    token, proj_id, _ = await _setup(client, "21")
+    token, proj_id, _ = await _setup_reviewer(client, "21")
     container_id = (await _create_container(client, token, proj_id)).json()["id"]
     await client.post(
         f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
@@ -445,7 +496,7 @@ async def test_transition_published_to_archived(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_transition_shared_to_archived(client: AsyncClient):
     """ISO 19650 allows archiving directly from Shared state."""
-    token, proj_id, _ = await _setup(client, "22")
+    token, proj_id, _ = await _setup_reviewer(client, "22")
     container_id = (await _create_container(client, token, proj_id)).json()["id"]
     await client.post(
         f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",
@@ -464,7 +515,7 @@ async def test_transition_shared_to_archived(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_transition_published_to_wip_via_revise(client: AsyncClient):
     """Published container + action=revise → state returns to WIP."""
-    token, proj_id, _ = await _setup(client, "22b")
+    token, proj_id, _ = await _setup_reviewer(client, "22b")
     container_id = (await _create_container(client, token, proj_id)).json()["id"]
     await client.post(
         f"/api/v1/projects/{proj_id}/containers/{container_id}/transition",

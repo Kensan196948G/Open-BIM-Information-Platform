@@ -12,6 +12,7 @@ from app.services.naming_validator import (
     SegmentDefinition,
     _default_iso19650_rule,
 )
+from app.services.rbac import P_NAMING_RULE_MANAGE, require_permission
 
 router = APIRouter(prefix="/projects/{project_id}/naming-rules", tags=["naming-rules"])
 
@@ -115,7 +116,13 @@ async def upsert_naming_rule(
     current_user: CurrentUser,
     db: DB,
 ) -> NamingRuleResponse:
-    await _get_project_or_404(project_id, current_user, db)
+    project = await _get_project_or_404(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_NAMING_RULE_MANAGE,
+    )
     result = await db.execute(
         select(ProjectNamingRule).where(ProjectNamingRule.project_id == project_id)
     )
@@ -166,7 +173,13 @@ async def delete_naming_rule(
     current_user: CurrentUser,
     db: DB,
 ) -> None:
-    await _get_project_or_404(project_id, current_user, db)
+    project = await _get_project_or_404(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_NAMING_RULE_MANAGE,
+    )
     result = await db.execute(
         select(ProjectNamingRule).where(ProjectNamingRule.project_id == project_id)
     )

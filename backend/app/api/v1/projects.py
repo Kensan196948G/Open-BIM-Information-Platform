@@ -11,6 +11,7 @@ from app.schemas.project import (
     ProjectUpdate,
 )
 from app.services.audit import enum_value, record_audit
+from app.services.rbac import P_PROJECT_CREATE, P_PROJECT_UPDATE, require_permission
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -97,6 +98,12 @@ async def create_project(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Platform admins must specify organization_id.",
         )
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=org_id,
+        permission_code=P_PROJECT_CREATE,
+    )
 
     project = Project(organization_id=org_id, **body.model_dump())
     db.add(project)
@@ -138,6 +145,12 @@ async def update_project(
     db: DB,
 ) -> ProjectResponse:
     project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_PROJECT_UPDATE,
+    )
     before_json = {
         "name": project.name,
         "status": enum_value(project.status),

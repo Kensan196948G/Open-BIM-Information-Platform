@@ -40,3 +40,29 @@ export async function listContainers(
   );
   return res.data;
 }
+
+export interface ContainerRevisionItem {
+  id: string;
+  revision_code: string;
+  version_code: string;
+  change_reason: string | null;
+  change_summary: string | null;
+  created_by: string;
+  created_at: string | null;
+  file: {
+    id: string;
+    original_filename: string;
+    file_size_bytes: number;
+    checksum_sha256: string;
+  } | null;
+}
+
+export async function listContainerRevisions(
+  projectId: string,
+  containerId: string,
+): Promise<ContainerRevisionItem[]> {
+  const res = await api.get<ContainerRevisionItem[]>(
+    `/projects/${projectId}/containers/${containerId}/revisions`,
+  );
+  return res.data;
+}

@@ -16,6 +16,11 @@ from app.schemas.requirements import (
     RequirementsDocumentUpdate,
 )
 from app.services.audit import enum_value, record_audit
+from app.services.rbac import (
+    P_REQUIREMENTS_MANAGE,
+    P_REQUIREMENTS_READ,
+    require_permission,
+)
 
 router = APIRouter(tags=["requirements"])
 
@@ -79,7 +84,13 @@ async def create_requirements_document(
     current_user: CurrentUser,
     db: DB,
 ) -> RequirementsDocumentResponse:
-    await _require_project_membership(project_id, current_user, db)
+    project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_REQUIREMENTS_MANAGE,
+    )
     doc = RequirementsDocument(
         project_id=project_id,
         owner_user_id=current_user.id,
@@ -117,22 +128,32 @@ async def list_requirements_documents(
     current_user: CurrentUser,
     db: DB,
     doc_type: str | None = Query(None),
+    q: str | None = Query(None, max_length=200),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
 ) -> RequirementsDocumentListResponse:
-    await _require_project_membership(project_id, current_user, db)
-    q = (
+    project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_REQUIREMENTS_READ,
+    )
+    query = (
         select(RequirementsDocument)
         .where(RequirementsDocument.project_id == project_id)
         .options(selectinload(RequirementsDocument.items))
     )
     if doc_type:
-        q = q.where(RequirementsDocument.doc_type == doc_type)
+        query = query.where(RequirementsDocument.doc_type == doc_type)
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.where(RequirementsDocument.title.ilike(like))
 
     total = (
-        await db.execute(select(func.count()).select_from(q.subquery()))
+        await db.execute(select(func.count()).select_from(query.subquery()))
     ).scalar_one()
-    result = await db.execute(q.offset((page - 1) * size).limit(size))
+    result = await db.execute(query.offset((page - 1) * size).limit(size))
     docs = result.scalars().all()
     return RequirementsDocumentListResponse(
         items=[_document_response(d) for d in docs],
@@ -150,7 +171,13 @@ async def get_requirements_document(
     current_user: CurrentUser,
     db: DB,
 ) -> RequirementsDocumentResponse:
-    await _require_project_membership(project_id, current_user, db)
+    project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_REQUIREMENTS_READ,
+    )
     result = await db.execute(
         select(RequirementsDocument)
         .where(
@@ -179,7 +206,13 @@ async def update_requirements_document(
     current_user: CurrentUser,
     db: DB,
 ) -> RequirementsDocumentResponse:
-    await _require_project_membership(project_id, current_user, db)
+    project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_REQUIREMENTS_MANAGE,
+    )
     result = await db.execute(
         select(RequirementsDocument)
         .where(
@@ -233,7 +266,13 @@ async def delete_requirements_document(
     current_user: CurrentUser,
     db: DB,
 ) -> None:
-    await _require_project_membership(project_id, current_user, db)
+    project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_REQUIREMENTS_MANAGE,
+    )
     result = await db.execute(
         select(RequirementsDocument).where(
             RequirementsDocument.id == doc_id,
@@ -272,7 +311,13 @@ async def create_requirement_item(
     current_user: CurrentUser,
     db: DB,
 ) -> RequirementItemResponse:
-    await _require_project_membership(project_id, current_user, db)
+    project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_REQUIREMENTS_MANAGE,
+    )
     result = await db.execute(
         select(RequirementsDocument).where(
             RequirementsDocument.id == doc_id,
@@ -317,7 +362,13 @@ async def list_requirement_items(
     current_user: CurrentUser,
     db: DB,
 ) -> list[RequirementItemResponse]:
-    await _require_project_membership(project_id, current_user, db)
+    project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_REQUIREMENTS_READ,
+    )
     result = await db.execute(
         select(RequirementsDocument).where(
             RequirementsDocument.id == doc_id,
@@ -350,7 +401,13 @@ async def update_requirement_item(
     current_user: CurrentUser,
     db: DB,
 ) -> RequirementItemResponse:
-    await _require_project_membership(project_id, current_user, db)
+    project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_REQUIREMENTS_MANAGE,
+    )
     result = await db.execute(
         select(RequirementItem).where(
             RequirementItem.id == item_id,
@@ -403,7 +460,13 @@ async def delete_requirement_item(
     current_user: CurrentUser,
     db: DB,
 ) -> None:
-    await _require_project_membership(project_id, current_user, db)
+    project = await _require_project_membership(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_REQUIREMENTS_MANAGE,
+    )
     result = await db.execute(
         select(RequirementItem).where(
             RequirementItem.id == item_id,

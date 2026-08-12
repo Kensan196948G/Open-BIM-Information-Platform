@@ -267,10 +267,18 @@ export default function ContainersPage() {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["containers", projectId],
+    queryKey: ["containers", projectId, stateFilter, q],
     queryFn: () =>
       api
-        .get<PaginatedResponse<InformationContainer>>(`/projects/${projectId}/containers`)
+        .get<PaginatedResponse<InformationContainer>>(
+          `/projects/${projectId}/containers`,
+          {
+            params: {
+              state: stateFilter === "all" ? undefined : stateFilter,
+              q: q.trim() || undefined,
+            },
+          },
+        )
         .then((r) => r.data),
     enabled: !!projectId && projectId !== "demo",
   });

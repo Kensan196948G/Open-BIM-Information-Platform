@@ -51,11 +51,20 @@ async def _register_and_login(
     return res.json()["access_token"], user_id
 
 
-async def _add_membership(user_id: str, org_id: str) -> None:
+async def _add_membership(
+    user_id: str, org_id: str, role: str = "member", is_org_admin: bool = False
+) -> None:
     from tests.conftest import TestSessionLocal
 
     async with TestSessionLocal() as session:
-        session.add(UserOrganization(user_id=user_id, organization_id=org_id))
+        session.add(
+            UserOrganization(
+                user_id=user_id,
+                organization_id=org_id,
+                role_in_org=role,
+                is_org_admin=is_org_admin,
+            )
+        )
         await session.commit()
 
 
@@ -86,7 +95,7 @@ async def test_get_naming_rule_returns_default(client: AsyncClient):
 async def test_put_naming_rule_creates_custom(client: AsyncClient):
     org_id, proj_id = await _setup_org_project()
     token, user_id = await _register_and_login(client, "nr2@example.com", "nr2")
-    await _add_membership(user_id, org_id)
+    await _add_membership(user_id, org_id, role="org_admin", is_org_admin=True)
 
     rule_body = {
         "separator": "_",
@@ -119,7 +128,7 @@ async def test_put_naming_rule_creates_custom(client: AsyncClient):
 async def test_get_returns_custom_after_put(client: AsyncClient):
     org_id, proj_id = await _setup_org_project()
     token, user_id = await _register_and_login(client, "nr3@example.com", "nr3")
-    await _add_membership(user_id, org_id)
+    await _add_membership(user_id, org_id, role="org_admin", is_org_admin=True)
 
     await client.put(
         f"/api/v1/projects/{proj_id}/naming-rules",
@@ -145,7 +154,7 @@ async def test_get_returns_custom_after_put(client: AsyncClient):
 async def test_delete_naming_rule_resets_to_default(client: AsyncClient):
     org_id, proj_id = await _setup_org_project()
     token, user_id = await _register_and_login(client, "nr4@example.com", "nr4")
-    await _add_membership(user_id, org_id)
+    await _add_membership(user_id, org_id, role="org_admin", is_org_admin=True)
 
     await client.put(
         f"/api/v1/projects/{proj_id}/naming-rules",
@@ -209,7 +218,7 @@ async def test_container_naming_invalid_with_default_rule(client: AsyncClient):
 async def test_container_uses_custom_naming_rule(client: AsyncClient):
     org_id, proj_id = await _setup_org_project()
     token, user_id = await _register_and_login(client, "nr7@example.com", "nr7")
-    await _add_membership(user_id, org_id)
+    await _add_membership(user_id, org_id, role="org_admin", is_org_admin=True)
 
     # Set simple custom rule: proj_code _ number
     await client.put(
