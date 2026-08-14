@@ -180,6 +180,14 @@ flowchart LR
   承認・通知・監査・要求文書・RBAC・設定）が実 API と実 DB で動作します。
 - パスワード変更 API と設定画面を実装し、設定画面の未実装機能を誠実に表示するよう是正しました。
 
+## 本番公開（2026-08-15）
+
+- **本番 URL: https://open-bim.mirai-dx-platform.com** を Cloudflare Tunnel で公開しました。
+- production モード（ENVIRONMENT=production・自己登録無効・production 起動ガード通過）で稼働。
+- 本番 DB（bim_prod）には**架空デモデータのみ**投入（実データなし）。
+- 詳細は [本番デプロイ Runbook](docs/PRODUCTION_DEPLOYMENT.md) を参照。
+- 注意: 本番環境での実データ投入・監視通知・バックアップの定期化は今後の運用タスクです。
+
 ---
 
 ## よくある質問

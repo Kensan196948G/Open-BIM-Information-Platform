@@ -2,7 +2,7 @@
 
 > 本ドキュメントは **関係者レビュー用 MVP / Prototype** の起動・操作手順です。
 > すべてのデータは**架空のデモデータ**です（実在の人物・企業・案件とは無関係）。
-> 本番運用化は対象外です（本番展開は `docs/PRODUCTION_DEPLOYMENT.md` 参照）。
+> 本番展開は `docs/PRODUCTION_DEPLOYMENT.md` 参照（2026-08-15 に Cloudflare Tunnel で公開済み）。
 
 ---
 
@@ -15,7 +15,7 @@
 | データ | 架空デモデータ（`scripts/seed_mvp.py` で再生成可能） |
 | ログイン | デモユーザー（下記）・パスワードは全て `DemoPass123!` |
 | **公開 URL（レビュー用）** | **https://open-bim-mvp.mirai-dx-platform.com**（Cloudflare Tunnel） |
-| 本番 URL（予定） | `open-bim.mirai-dx-platform.com`（未提供・Issue #31） |
+| 本番 URL | **https://open-bim.mirai-dx-platform.com**（2026-08-15 公開・production モード・架空データのみ） |
 
 ---
 
