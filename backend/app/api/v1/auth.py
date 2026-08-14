@@ -39,6 +39,12 @@ class LogoutRequest(BaseModel):
     refresh_token: str | None = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    new_password_confirm: str
+
+
 def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
 
@@ -329,3 +335,73 @@ async def logout(
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: CurrentUser) -> UserResponse:
     return UserResponse.model_validate(current_user)
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_password(
+    request: Request,
+    body: ChangePasswordRequest,
+    current_user: CurrentUser,
+    db: DB,
+) -> None:
+    """Change the current user's password (verifies the current password)."""
+    ip = _client_ip(request)
+    if not current_user.hashed_password:
+        record_audit(
+            db,
+            event_type="user.password_change_rejected",
+            operation="change_password",
+            target_type="user",
+            target_id=current_user.id,
+            actor_id=current_user.id,
+            actor_ip=ip,
+            result="failure",
+            reason="account has no local password (OIDC-only user)",
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account has no local password. Use your identity provider.",
+        )
+
+    if not verify_password(body.current_password, current_user.hashed_password):
+        record_audit(
+            db,
+            event_type="user.password_change_failed",
+            operation="change_password",
+            target_type="user",
+            target_id=current_user.id,
+            actor_id=current_user.id,
+            actor_ip=ip,
+            result="failure",
+            reason="current password mismatch",
+        )
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    if body.new_password != body.new_password_confirm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New passwords do not match",
+        )
+    if len(body.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters",
+        )
+
+    current_user.hashed_password = hash_password(body.new_password)
+    record_audit(
+        db,
+        event_type="user.password_changed",
+        operation="change_password",
+        target_type="user",
+        target_id=current_user.id,
+        actor_id=current_user.id,
+        actor_ip=ip,
+        result="success",
+    )
+    await db.commit()

@@ -256,3 +256,84 @@ async def test_refresh_invalid_token_returns_401(client: AsyncClient):
         json={"refresh_token": "not-a-real-token"},
     )
     assert res.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_change_password_success_and_relogin(client: AsyncClient):
+    """Change password then log in with the new password (old one fails)."""
+    await _register(client, "changepw@example.com", "changepwuser")
+    token = await _login(client, "changepw@example.com")
+
+    res = await client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "current_password": "pass1234",
+            "new_password": "NewPass5678",
+            "new_password_confirm": "NewPass5678",
+        },
+    )
+    assert res.status_code == 204
+
+    # Old password must now fail
+    old = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "changepw@example.com", "password": "pass1234"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert old.status_code == 401
+
+    # New password must succeed
+    new = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "changepw@example.com", "password": "NewPass5678"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert new.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_change_password_wrong_current_returns_400(client: AsyncClient):
+    await _register(client, "wrongpw@example.com", "wrongpwuser")
+    token = await _login(client, "wrongpw@example.com")
+
+    res = await client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "current_password": "wrong-current",
+            "new_password": "NewPass5678",
+            "new_password_confirm": "NewPass5678",
+        },
+    )
+    assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_change_password_mismatch_returns_400(client: AsyncClient):
+    await _register(client, "mismatch@example.com", "mismatchuser")
+    token = await _login(client, "mismatch@example.com")
+
+    res = await client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "current_password": "pass1234",
+            "new_password": "NewPass5678",
+            "new_password_confirm": "Different5678",
+        },
+    )
+    assert res.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_change_password_requires_auth(client: AsyncClient):
+    res = await client.post(
+        "/api/v1/auth/change-password",
+        json={
+            "current_password": "pass1234",
+            "new_password": "NewPass5678",
+            "new_password_confirm": "NewPass5678",
+        },
+    )
+    assert res.status_code == 401

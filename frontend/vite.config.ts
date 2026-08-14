@@ -21,6 +21,11 @@ export default defineConfig({
   },
   preview: {
     port: 4173,
+    allowedHosts: [
+      "localhost",
+      "127.0.0.1",
+      "open-bim-mvp.mirai-dx-platform.com",
+    ],
     proxy: {
       "/api": {
         target: process.env.VITE_API_BASE_URL || "http://localhost:8000",

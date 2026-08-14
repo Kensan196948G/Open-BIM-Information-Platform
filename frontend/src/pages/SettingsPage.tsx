@@ -2,19 +2,20 @@ import { useState } from "react";
 import {
   Bell,
   Building2,
+  CheckCircle2,
   Key,
+  Loader2,
   Lock,
   Save,
   Settings,
   Shield,
-  Tag,
   User,
 } from "lucide-react";
 import { useAuthStore } from "@/hooks/useAuthStore";
 import { api } from "@/lib/api";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
-type Tab = "profile" | "org" | "notifications" | "security" | "rbac";
+type Tab = "profile" | "org" | "notifications" | "security";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "profile", label: "プロフィール", icon: <User className="h-4 w-4" /> },
@@ -32,44 +33,6 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     id: "security",
     label: "セキュリティ",
     icon: <Shield className="h-4 w-4" />,
-  },
-  { id: "rbac", label: "ロール・権限", icon: <Key className="h-4 w-4" /> },
-];
-
-const ROLES = [
-  {
-    id: "admin",
-    name: "システム管理者",
-    desc: "全機能への完全アクセス",
-    color: "#e0483b",
-    perms: [
-      "プロジェクト管理",
-      "ユーザー管理",
-      "監査ログ閲覧",
-      "承認操作",
-      "コンテナ全操作",
-    ],
-  },
-  {
-    id: "bim_manager",
-    name: "BIM マネージャー",
-    desc: "情報管理・承認操作",
-    color: "#2c63e6",
-    perms: ["プロジェクト管理", "承認操作", "コンテナ全操作", "監査ログ閲覧"],
-  },
-  {
-    id: "designer",
-    name: "設計担当",
-    desc: "コンテナ作成・共有",
-    color: "#14a85f",
-    perms: ["コンテナ作成", "コンテナ共有申請", "要求文書閲覧"],
-  },
-  {
-    id: "viewer",
-    name: "閲覧者",
-    desc: "読み取り専用",
-    color: "#9b59b6",
-    perms: ["コンテナ閲覧", "要求文書閲覧"],
   },
 ];
 
@@ -118,42 +81,107 @@ function ProfileTab() {
 
       <div className="app-card-pad">
         <div className="t-h2 mb-4">パスワード変更</div>
-        <p className="t-sec mb-3 text-xs">
-          パスワード変更は未実装です。SSO（Entra ID / HENNGE）導入後は IdP 側で実施してください。
+        <PasswordChangeForm />
+      </div>
+    </div>
+  );
+}
+
+function PasswordChangeForm() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [message, setMessage] = useState<{
+    kind: "ok" | "err";
+    text: string;
+  } | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      await api.post("/auth/change-password", {
+        current_password: current,
+        new_password: next,
+        new_password_confirm: confirm,
+      });
+    },
+    onSuccess: () => {
+      setMessage({ kind: "ok", text: "パスワードを更新しました。" });
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+    },
+    onError: (err: unknown) => {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "パスワードを更新できませんでした。";
+      setMessage({ kind: "err", text: detail });
+    },
+  });
+
+  const canSubmit =
+    current.length > 0 && next.length >= 8 && next === confirm && !mutation.isPending;
+
+  return (
+    <div className="space-y-3">
+      {message && (
+        <p
+          className="text-xs"
+          style={{
+            color:
+              message.kind === "ok" ? "var(--success-fg)" : "var(--danger-fg)",
+          }}
+        >
+          {message.kind === "ok" ? (
+            <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+          ) : null}
+          {message.text}
         </p>
-        <div className="space-y-3">
-          <div>
-            <label className="t-tiny mb-1 block">現在のパスワード</label>
-            <input
-              className="app-field"
-              type="password"
-              placeholder="••••••••"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="t-tiny mb-1 block">新しいパスワード</label>
-              <input
-                className="app-field"
-                type="password"
-                placeholder="••••••••"
-              />
-            </div>
-            <div>
-              <label className="t-tiny mb-1 block">確認</label>
-              <input
-                className="app-field"
-                type="password"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-          <button className="app-btn app-btn-sm" disabled title="未実装">
-            <Lock className="h-3.5 w-3.5" />
-            パスワードを更新
-          </button>
+      )}
+      <div>
+        <label className="t-tiny mb-1 block">現在のパスワード</label>
+        <input
+          className="app-field"
+          type="password"
+          placeholder="••••••••"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="t-tiny mb-1 block">新しいパスワード（8文字以上）</label>
+          <input
+            className="app-field"
+            type="password"
+            placeholder="••••••••"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="t-tiny mb-1 block">確認</label>
+          <input
+            className="app-field"
+            type="password"
+            placeholder="••••••••"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+          />
         </div>
       </div>
+      <button
+        className="app-btn app-btn-sm"
+        disabled={!canSubmit}
+        title={canSubmit ? undefined : "入力内容を確認してください"}
+        onClick={() => mutation.mutate()}
+      >
+        {mutation.isPending ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Lock className="h-3.5 w-3.5" />
+        )}
+        パスワードを更新
+      </button>
     </div>
   );
 }
@@ -219,99 +247,40 @@ function OrgTab() {
 }
 
 function NotificationsTab() {
-  const [settings, setSettings] = useState({
-    approval_request: true,
-    approval_done: true,
-    container_shared: true,
-    container_published: false,
-    naming_violation: true,
-    security_alert: true,
-    weekly_report: false,
-    digest_email: true,
-  });
-
-  const toggle = (k: keyof typeof settings) =>
-    setSettings((s) => ({ ...s, [k]: !s[k] }));
-
-  const items: { key: keyof typeof settings; label: string; desc: string }[] = [
-    {
-      key: "approval_request",
-      label: "承認依頼",
-      desc: "承認タスクが届いたとき",
-    },
-    {
-      key: "approval_done",
-      label: "承認完了",
-      desc: "自分の申請が承認・差し戻しされたとき",
-    },
-    {
-      key: "container_shared",
-      label: "コンテナ共有",
-      desc: "コンテナが Shared 状態に遷移したとき",
-    },
-    {
-      key: "container_published",
-      label: "コンテナ発行",
-      desc: "コンテナが Published になったとき",
-    },
-    {
-      key: "naming_violation",
-      label: "命名規則違反",
-      desc: "命名エラーが検出されたとき",
-    },
-    {
-      key: "security_alert",
-      label: "セキュリティ警告",
-      desc: "不審なアクセスが検出されたとき",
-    },
-    {
-      key: "weekly_report",
-      label: "週次レポート",
-      desc: "毎週月曜日にサマリーをメール送信",
-    },
-    {
-      key: "digest_email",
-      label: "ダイジェストメール",
-      desc: "1 日 1 回まとめてメール送信",
-    },
-  ];
-
   return (
     <div className="app-card-pad space-y-4">
       <div className="t-h2 mb-2">通知設定</div>
-      {items.map(({ key, label, desc }) => (
-        <div
-          key={key}
-          className="flex items-center justify-between gap-4 py-2"
-          style={{ borderBottom: "1px solid var(--border)" }}
-        >
-          <div>
-            <div
-              className="text-sm font-medium"
-              style={{ color: "var(--text)" }}
-            >
-              {label}
-            </div>
-            <div className="t-sec text-xs">{desc}</div>
-          </div>
-          <button
-            className="relative h-6 w-11 shrink-0 rounded-full transition-colors"
-            style={{
-              background: settings[key] ? "var(--primary)" : "var(--surface-3)",
-            }}
-            onClick={() => toggle(key)}
-          >
-            <span
-              className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"
-              style={{ left: settings[key] ? "calc(100% - 1.375rem)" : "2px" }}
-            />
-          </button>
+      <p className="t-sec text-xs">
+        アプリ内通知は常時有効です（承認依頼・承認結果・コンテナ状態変更を自動通知）。
+        メール通知は本番展開（Phase 1）で Exchange Online / SMTP 連携とあわせて提供予定です。
+      </p>
+      <div
+        className="rounded-lg p-3 text-xs"
+        style={{ background: "var(--surface-2)" }}
+      >
+        <div className="mb-2 flex items-center gap-2">
+          <Bell className="h-4 w-4" style={{ color: "var(--primary)" }} />
+          <span className="font-medium">アプリ内通知（実装済み）</span>
         </div>
-      ))}
-      <button className="app-btn app-btn-primary app-btn-sm">
-        <Save className="h-3.5 w-3.5" />
-        保存
-      </button>
+        <ul className="list-inside list-disc space-y-1 t-sec">
+          <li>承認依頼（承認者へ自動通知）</li>
+          <li>承認結果（申請者へ自動通知）</li>
+          <li>コンテナ状態変更（作成者へ自動通知）</li>
+          <li>未読バッジ・一覧・既読管理（ヘッダーのベルアイコン）</li>
+        </ul>
+      </div>
+      <div
+        className="rounded-lg p-3 text-xs"
+        style={{ background: "var(--surface-2)" }}
+      >
+        <div className="mb-2 flex items-center gap-2">
+          <Save className="h-4 w-4" style={{ color: "var(--text-3)" }} />
+          <span className="font-medium">メール通知（未実装）</span>
+        </div>
+        <p className="t-sec">
+          承認依頼・ダイジェスト等のメール配信はロードマップ（Phase 1）に含まれます。
+        </p>
+      </div>
     </div>
   );
 }
@@ -324,15 +293,27 @@ function SecurityTab() {
           <Shield className="h-5 w-5" style={{ color: "var(--primary)" }} />
           <div className="t-h2">セキュリティ概要</div>
         </div>
+        <p className="t-sec mb-4 text-xs">
+          多要素認証・APIトークン・セッション管理は本番展開（Phase 1-2）で
+          導入予定です。現在の認証方式は JWT（アクセス+リフレッシュトークン）です。
+        </p>
         <div className="grid gap-3 sm:grid-cols-3">
           {[
             {
-              label: "最終ログイン",
-              value: "2026-06-14 09:32",
+              label: "認証方式",
+              value: "JWT",
+              tone: "info",
+            },
+            {
+              label: "自己登録",
+              value: "開発環境のみ",
+              tone: "warning",
+            },
+            {
+              label: "監査ログ",
+              value: "Append-Only",
               tone: "success",
             },
-            { label: "アクティブセッション", value: "1", tone: "info" },
-            { label: "ログイン失敗 (30日)", value: "0", tone: "success" },
           ].map(({ label, value, tone }) => (
             <div key={label} className="app-card-pad py-3">
               <div className={`mono text-xl font-bold tone-${tone}`}>
@@ -352,134 +333,29 @@ function SecurityTab() {
         >
           <div>
             <div className="text-sm font-semibold">TOTP 認証アプリ</div>
-            <div className="t-sec text-xs">Google Authenticator / Authy</div>
+            <div className="t-sec text-xs">
+              Google Authenticator / Authy（未実装・本番導入時に対応）
+            </div>
           </div>
-          <span className="app-badge tone-success app-badge-sq text-xs">
-            有効
+          <span className="app-badge app-badge-sq text-xs" style={{ opacity: 0.7 }}>
+            未設定
           </span>
         </div>
-        <button className="app-btn app-btn-sm mt-3">設定を変更</button>
+        <p className="t-tiny mt-2">
+          本番環境では Entra ID / HENNGE などの IdP 側で MFA を強制します（設計方針）。
+        </p>
       </div>
 
       <div className="app-card-pad">
         <div className="t-h2 mb-3">アクセストークン</div>
         <p className="t-sec mb-3 text-xs">
-          API アクセス用の長期トークンを管理します。
+          API アクセス用の長期トークンは未実装です（本番展開時に提供予定）。
         </p>
-        <div className="space-y-2">
-          {[
-            {
-              name: "CI/CD Pipeline",
-              created: "2026-05-01",
-              last: "2026-06-14",
-            },
-            {
-              name: "BIM Connector v2",
-              created: "2026-03-15",
-              last: "2026-06-13",
-            },
-          ].map((t) => (
-            <div
-              key={t.name}
-              className="flex items-center justify-between rounded-lg px-3 py-2"
-              style={{ background: "var(--surface-2)" }}
-            >
-              <div>
-                <div className="text-sm font-medium">{t.name}</div>
-                <div className="t-tiny">
-                  作成: {t.created} · 最終利用: {t.last}
-                </div>
-              </div>
-              <button
-                className="app-btn app-btn-sm"
-                style={{
-                  color: "var(--danger-fg)",
-                  borderColor: "var(--danger-border)",
-                }}
-              >
-                失効
-              </button>
-            </div>
-          ))}
-        </div>
-        <button className="app-btn app-btn-sm mt-3">
+        <button className="app-btn app-btn-sm" disabled title="未実装">
           <Key className="h-3.5 w-3.5" />
           新しいトークンを発行
         </button>
       </div>
-    </div>
-  );
-}
-
-function RbacTab() {
-  const [selected, setSelected] = useState<string | null>(ROLES[0].id);
-  const role = ROLES.find((r) => r.id === selected);
-
-  return (
-    <div className="flex gap-4" style={{ minHeight: 400 }}>
-      <div className="w-52 shrink-0 space-y-1">
-        {ROLES.map((r) => (
-          <button
-            key={r.id}
-            className="w-full rounded-xl px-3 py-2.5 text-left transition-colors"
-            style={
-              selected === r.id
-                ? {
-                    background: "var(--primary-subtle)",
-                    color: "var(--primary-text)",
-                  }
-                : { color: "var(--text)" }
-            }
-            onClick={() => setSelected(r.id)}
-          >
-            <div className="flex items-center gap-2">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: r.color }}
-              />
-              <span className="text-sm font-medium">{r.name}</span>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {role && (
-        <div className="app-card-pad flex-1 space-y-4">
-          <div className="flex items-center gap-3">
-            <span
-              className="h-3.5 w-3.5 rounded-full"
-              style={{ background: role.color }}
-            />
-            <div>
-              <div className="font-semibold" style={{ color: "var(--text)" }}>
-                {role.name}
-              </div>
-              <div className="t-sec text-xs">{role.desc}</div>
-            </div>
-          </div>
-          <div>
-            <div className="t-tiny mb-2">付与されている権限</div>
-            <div className="flex flex-wrap gap-2">
-              {role.perms.map((p) => (
-                <span
-                  key={p}
-                  className="app-badge app-badge-sq flex items-center gap-1.5"
-                  style={{ fontSize: 12 }}
-                >
-                  <Tag className="h-3 w-3" />
-                  {p}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div
-            className="t-sec rounded-lg p-3 text-xs"
-            style={{ background: "var(--surface-2)" }}
-          >
-            ロール権限の変更はシステム管理者のみ可能です。変更は監査ログに記録されます。
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -532,7 +408,6 @@ export default function SettingsPage() {
       {tab === "org" && <OrgTab />}
       {tab === "notifications" && <NotificationsTab />}
       {tab === "security" && <SecurityTab />}
-      {tab === "rbac" && <RbacTab />}
     </div>
   );
 }
