@@ -1,7 +1,8 @@
 # 本番デプロイ Runbook
 
-> 本番環境の提供を受けた後の実施手順。**本番環境は2026-08-05時点で未確定**のため、
-> この手順は準備済みであり、実行は環境確定後に行う。
+> **2026-08-15 更新: 本番 URL を Cloudflare Tunnel で公開済み**（`https://open-bim.mirai-dx-platform.com`）。
+> 現状の構成: ローカルホスト + Cloudflare Tunnel（production モード・架空デモデータのみ）。
+> SSH ホストへの deploy.yml 経由デプロイは Secrets 提供後に実施可能。
 
 ## 1. 前提条件チェックリスト
 

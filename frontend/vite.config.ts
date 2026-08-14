@@ -25,6 +25,7 @@ export default defineConfig({
       "localhost",
       "127.0.0.1",
       "open-bim-mvp.mirai-dx-platform.com",
+      "open-bim.mirai-dx-platform.com",
     ],
     proxy: {
       "/api": {
