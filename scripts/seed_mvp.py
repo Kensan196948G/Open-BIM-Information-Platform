@@ -147,6 +147,22 @@ async def _wipe(org: Organization, db: AsyncSession) -> None:
             UserOrganization.organization_id == org.id
         )
     )
+    # Demo users are reused (never deleted, audit_logs are append-only), but
+    # their seeded notifications must be wiped so re-runs stay idempotent.
+    user_ids = select(User.id).where(
+        User.email.in_(
+            [
+                "admin@mirai.example.jp",
+                "reviewer@mirai.example.jp",
+                "engineer@mirai.example.jp",
+                "chief@ozora.example.jp",
+                "designer@ozora.example.jp",
+            ]
+        )
+    )
+    await db.execute(
+        Notification.__table__.delete().where(Notification.user_id.in_(user_ids))
+    )
 
 
 async def main() -> None:
