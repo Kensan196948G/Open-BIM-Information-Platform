@@ -14,6 +14,8 @@
 | 構成 | FastAPI (backend) + React 19/TS/Vite (frontend) + PostgreSQL 15 + MinIO + Redis |
 | データ | 架空デモデータ（`scripts/seed_mvp.py` で再生成可能） |
 | ログイン | デモユーザー（下記）・パスワードは全て `DemoPass123!` |
+| **公開 URL（レビュー用）** | **https://open-bim-mvp.mirai-dx-platform.com**（Cloudflare Tunnel） |
+| 本番 URL（予定） | `open-bim.mirai-dx-platform.com`（未提供・Issue #31） |
 
 ---
 

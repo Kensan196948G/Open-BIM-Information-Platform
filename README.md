@@ -174,6 +174,7 @@ flowchart LR
 
 - 関係者レビュー用の **MVP / Prototype** 環境を整備しました
   （[MVP デモガイド](docs/MVP_DEMO.md)）。
+- 公開レビュー URL: **https://open-bim-mvp.mirai-dx-platform.com**（Cloudflare Tunnel、デモ用）
 - 架空のデモデータ（組織2・プロジェクト3・ユーザー8・コンテナ11・承認/通知/要求文書）を
   `scripts/seed_mvp.py` で投入・保持し、主要画面（ダッシュボード・プロジェクト・コンテナ・
   承認・通知・監査・要求文書・RBAC・設定）が実 API と実 DB で動作します。
