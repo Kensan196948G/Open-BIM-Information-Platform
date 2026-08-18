@@ -37,9 +37,9 @@
     "repair_count": 0,
     "max_repair": 3,
     "same_error_limit": 2,
-    "last_stop_at": "2026-06-17T13:00:34.705Z",
-    "current_session_start_at": "2026-06-18T00:00:01.000Z",
-    "last_trigger": "cron",
+    "last_stop_at": "2026-08-08T04:47:24.212Z",
+    "current_session_start_at": "2026-08-08T04:23:48.906Z",
+    "last_trigger": "manual",
     "last_cron_session_id": "20260618-010001-Open-BIM-Information-Platform",
     "last_claude_session_id": "86b04c9d-7f8d-48db-ad22-72588dfe9db2"
   },
@@ -73,14 +73,15 @@
   ],
   "blocked_issues": [],
   "production_gate": {
-    "status": "blocked_pending_environment",
-    "blocker": "本番環境が未確定: ドメイン/DNSレコードなし、Cloudflare Pages・Neonプロジェクトなし、GitHub Actions Secrets/Environmentsなし、デプロイワークフローなし、本番ホスト未指定",
+    "status": "live_via_tunnel",
+    "note": "2026-08-15 本番ドメイン open-bim.mirai-dx-platform.com の DNS(Tunnel CNAME) と Tunnel 設定を Cloudflare に登録。2026-08-18 に MVP・本番の全サービスを systemd(user) ユニットで常駐化し復旧（Linger=yes）。本番は production モード・架空デモデータのみ。",
+    "blocker": "SSH 経由デプロイ（deploy.yml）は GitHub Actions Secrets（PROD_HOST/PROD_USER/PROD_SSH_KEY/PROD_DIR）と人間承認（Human Gate）が未提供のため未実行。Cloudflare Pages 本番カスタムドメイン化・監視通知先・本番データでの復元演習も未実施。",
     "required_to_unblock": [
-      "本番ドメイン（例: open-bim.mirai-dx-platform.com）とDNS・TLS証明書",
-      "本番ホスト（VM/オンプレ）またはクラウド実行環境とSSH/デプロイ経路",
-      "GitHub Actions Secrets（本番用SECRET_KEY・DB/MinIO資格情報・通知先）",
-      "バックアップ保存先と復元演習の本番実績",
-      "監視・通知基盤と一次対応担当者の指名"
+      "GitHub Actions Secrets（本番用PROD_*・DB/MinIO資格情報・通知先）",
+      "Production deploy の Human Gate 承認（本ポリシー§8）",
+      "Cloudflare Pages への移行（任意・Tunnel 構成はドキュメント済み）",
+      "監視・通知基盤と一次対応担当者の指名",
+      "本番データでの復元演習（現在は架空データのみ）"
     ],
     "resolved_at": null
   },
@@ -124,6 +125,8 @@
     "ready": false,
     "ready_at": null,
     "version": "v0.1.0",
+    "live_url": "https://open-bim.mirai-dx-platform.com（Tunnel 経由・production モード・2026-08-15 公開 / 2026-08-18 systemd 常駐化で復旧）",
+    "mvp_url": "https://open-bim-mvp.mirai-dx-platform.com（Tunnel 経由）",
     "checklist": "docs/RELEASE_CHECKLIST.md",
     "runbook": "docs/OPERATIONS.md",
     "executor": "human (manual deploy required; CTO does not auto-deploy)",
@@ -212,11 +215,60 @@
         "frontend/src/vite-env.d.ts"
       ],
       "truncated": false
+    },
+    {
+      "at": "2026-08-08T04:47:24.255Z",
+      "kind": "tdd_required",
+      "message": "テスト未整備の変更が 52 件あります。/tdd または tdd-guide agent で対応してください。",
+      "files": [
+        "backend/alembic/versions/1f2e3d4c5b6a_add_audit_logs_trigger.py",
+        "backend/alembic/versions/2a3b4c5d6e7f_add_revoked_tokens.py",
+        "backend/alembic/versions/3c4d5e6f7a8b_add_requirement_item_status_notes.py",
+        "backend/alembic/versions/46aeadb1d6d7_initial_schema.py",
+        "backend/app/api/v1/auth.py",
+        "backend/app/api/v1/containers.py",
+        "backend/app/api/v1/naming_rules.py",
+        "backend/app/api/v1/oidc.py",
+        "backend/app/api/v1/projects.py",
+        "backend/app/api/v1/rbac.py",
+        "backend/app/api/v1/requirements.py",
+        "backend/app/api/v1/uploads.py",
+        "backend/app/api/v1/workflows.py",
+        "backend/app/core/config.py",
+        "backend/app/core/deps.py",
+        "backend/app/core/ratelimit.py",
+        "backend/app/core/security.py",
+        "backend/app/db/base.py",
+        "backend/app/models/__init__.py",
+        "backend/app/models/requirements.py",
+        "backend/app/models/revoked_token.py",
+        "backend/app/schemas/audit_log.py",
+        "backend/app/schemas/requirements.py",
+        "backend/app/services/audit.py",
+        "backend/app/services/av_scan.py",
+        "backend/app/services/oidc.py",
+        "backend/tests/conftest.py",
+        "backend/tests/test_audit_logs.py",
+        "backend/tests/test_audit_writes.py",
+        "backend/tests/test_auth.py"
+      ],
+      "truncated": true
     }
   ],
   "compact": {
-    "last_pre_compact_at": "2026-06-17T16:03:01.592Z",
+    "last_pre_compact_at": "2026-08-08T04:08:39.147Z",
     "all_prs_merged_at": "2026-06-17T12:53:22Z",
     "main_ci_last_success": "27690372666"
+  },
+  "agent_teams_usage": {
+    "session_start_at": "2026-08-08T04:23:48.906Z",
+    "current_session": {
+      "team_create_count": 0,
+      "send_message_count": 9,
+      "teammates": [],
+      "patterns_used": [],
+      "last_activity_at": "2026-08-08T04:46:03.555Z"
+    },
+    "history": []
   }
 }
