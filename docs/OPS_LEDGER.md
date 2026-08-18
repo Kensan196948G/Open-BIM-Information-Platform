@@ -40,7 +40,7 @@
 
 | 日時 | 重大度 | 概要 | 原因 | 対処 | 再発防止 | 担当 |
 |---|---|---|---|---|---|---|
-| （記入） | | | | | | |
+| 2026-08-18 | High | MVP・本番 URL（open-bim-mvp / open-bim.mirai-dx-platform.com）が HTTP 530 / Error 1033（Cloudflare Tunnel 到達不可） | 各サービス・Tunnel が手動プロセスで起動されており、ホスト再起動等で停止したため | バックエンド（:8030/:8040）・vite preview（:4190/:4191）・cloudflared（MVP/本番）を再起動し、ログイン・API・RBAC 403→200・監査ログまで実ブラウザ相当の curl 検証で復旧確認 | systemd（user）ユニット 6 本（`open-bim-*-{backend,frontend,tunnel}.service`）に移行・enabled（Linger=yes で再起動後も自動起動） | DevOps |
 
 ## 検証実績（2026-08-12 追記）
 
@@ -53,6 +53,10 @@
 | D2 | RBAC 職務分掌確認 | ✅ member の approve → 403 | ステージング API 検証 |
 | D2 | 負荷試験（workers=4・Redis共有レート制限） | ✅ login p50 3.45s / p95 4.45s（前回比 2.6 倍改善）、API p95 37〜73ms・エラー 0 | 改善ログ 追記2 |
 | D2 | 共有レート制限の実証 | ✅ 4 worker・25 並列 → 200×5 / 429×20（Redis 共有） | ステージング API 検証 |
+| D2 | MVP・本番 URL 復旧確認（2026-08-18） | ✅ 両 URL HTTP 200・ログイン（reviewer/engineer/platform-admin）・タスク一覧・通知・監査ログ・未認証 401・権限外 approve 403・正規 approve 200 を Tunnel 経由で確認 | 本ログ（インシデント記録参照） |
+| D3 | 運用恒久化（2026-08-18） | ✅ systemd user ユニット 6 本へ移行（enabled・Linger=yes）。`systemctl --user status open-bim-*` で全 active を確認 | `~/.config/systemd/user/open-bim-*.service` |
+| D1 | 空 DB への Migration + Seed 再実行（2026-08-18） | ✅ 空の PostgreSQL 15 コンテナ（bim_verify）へ `alembic upgrade head`（22 テーブル）→ `seed_mvp.py` を実行し、2 回目実行でも users=6 / orgs=2 / projects=3 / containers=11 で重複なし（冪等） | 本ログ（コンテナは検証後破棄） |
+| D2 | 実ブラウザ a11y・レスポンシブ・キーボード検証（2026-08-18） | ✅ 本番 URL で Playwright（chromium）検証 11/11: title/h1/ラベル付き入力/ボタン名/キーボード Tab 巡回/ログイン→ダッシュボード遷移/ナビ 10 リンク/モバイル 375px・デスクトップ 1440px で横スクロールなし/コンソールエラー 0 | Playwright スクリプト実行ログ（本ログ） |
 
 > 備考: 本番環境（ドメイン・Secrets・監視通知先）確定後に、本番データでの復元演習と
 > SLO 計測を開始する（Issue #31）。

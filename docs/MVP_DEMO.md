@@ -135,6 +135,37 @@ cd frontend && npm run type-check && npm run lint && npm run build && npm run te
 
 ---
 
+## ⚙️ 公開環境の運用（systemd user ユニット）
+
+> 2026-08-18 より、MVP と本番（`open-bim.mirai-dx-platform.com`）の各サービスは
+> systemd（user）ユニットで常駐化しています（`Linger=yes` のため再起動後も自動起動）。
+
+| ユニット | 内容 | ポート |
+|---|---|---|
+| `open-bim-mvp-backend.service` | MVP バックエンド（uvicorn、bim_mvp DB） | 127.0.0.1:8030 |
+| `open-bim-mvp-frontend.service` | MVP フロント（vite preview、/api → :8030） | 127.0.0.1:4190 |
+| `open-bim-mvp-tunnel.service` | MVP Cloudflare Tunnel | — |
+| `open-bim-prod-backend.service` | 本番バックエンド（uvicorn、bim_prod DB、production ガード有効） | 127.0.0.1:8040 |
+| `open-bim-prod-frontend.service` | 本番フロント（vite preview、/api → :8040） | 127.0.0.1:4191 |
+| `open-bim-prod-tunnel.service` | 本番 Cloudflare Tunnel | — |
+
+```bash
+# 状態確認 / ログ
+systemctl --user status open-bim-{mvp,prod}-{backend,frontend,tunnel}.service
+journalctl --user -u open-bim-prod-backend.service -f
+
+# 再起動 / 停止 / 起動
+systemctl --user restart open-bim-prod-backend.service
+systemctl --user stop open-bim-mvp-tunnel.service
+systemctl --user start open-bim-mvp-tunnel.service
+```
+
+- 設定ファイル: `~/.config/systemd/user/open-bim-*.service`（本番は `.env.production`、MVP は `~/.config/open-bim/mvp.env` を EnvironmentFile で参照）
+- 障害時は `curl -f https://open-bim.mirai-dx-platform.com/health` で疎通確認し、
+  `journalctl --user -u open-bim-prod-*` で原因を確認してください。
+
+---
+
 ## ⚠️ 注意事項
 
 - 本環境は**評価・デモ専用**です。本番データを投入しないでください。

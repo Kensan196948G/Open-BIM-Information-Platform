@@ -88,6 +88,21 @@ curl -f https://<domain>/health
 curl -ksI https://<domain>/ | grep -i content-security-policy
 ```
 
+### 公開環境の常駐化（systemd user ユニット、2026-08-18 導入）
+
+本番・MVP の各サービスは systemd（user）ユニットで常駐化している（`Linger=yes` で再起動後も自動起動）。
+
+```bash
+systemctl --user status open-bim-{mvp,prod}-{backend,frontend,tunnel}.service
+journalctl --user -u open-bim-prod-backend.service -f   # 本番ログ
+systemctl --user restart open-bim-prod-backend.service  # 更新反映
+```
+
+- ユニット定義: `~/.config/systemd/user/open-bim-*.service`
+- 環境変数: 本番 = `.env.production` / MVP = `~/.config/open-bim/mvp.env`（0600）
+- 構成: vite preview（MVP :4190 / 本番 :4191）→ /api プロキシ → uvicorn（MVP :8030 / 本番 :8040）→ Cloudflare Tunnel
+- 手動プロセスで起動しないこと（再起動時に停止し HTTP 530 になるため）
+
 ## 5. ロールバック
 
 ```bash
@@ -102,6 +117,9 @@ DBマイグレーションのロールバックは `alembic downgrade -1`（`doc
 # cron / systemd timer で日次実行
 MONITOR_HEALTH_URL=https://<domain>/health ./scripts/monitor.sh
 ```
+
+- 障害時の一次確認: `curl -f https://open-bim.mirai-dx-platform.com/health` →
+  失敗時は `systemctl --user status open-bim-*` と `journalctl --user -u open-bim-*` で確認
 
 - `docs/OPS_LEDGER.md` の日次/週次/月次/四半期項目を担当者へ割当
 - `docs/SLI_SLO.md` の通知試験・SLO計測を開始

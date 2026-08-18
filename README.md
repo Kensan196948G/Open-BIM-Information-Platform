@@ -188,6 +188,14 @@ flowchart LR
 - 詳細は [本番デプロイ Runbook](docs/PRODUCTION_DEPLOYMENT.md) を参照。
 - 注意: 本番環境での実データ投入・監視通知・バックアップの定期化は今後の運用タスクです。
 
+## 運用（2026-08-18: 常駐化・復旧）
+
+- MVP・本番の全サービス（バックエンド・フロント・Tunnel 各2本）を
+  **systemd（user）ユニット**で常駐化しました（`Linger=yes` により再起動後も自動起動）。
+- 2026-08-18 に発生した HTTP 530（Tunnel 停止）はユニット化により解消・再発防止済み。
+- 状態確認: `systemctl --user status open-bim-{mvp,prod}-{backend,frontend,tunnel}.service`
+- 障害対応: [運用台帳](docs/OPS_LEDGER.md) インシデント記録・[MVP デモガイド](docs/MVP_DEMO.md) の運用節を参照。
+
 ---
 
 ## よくある質問
