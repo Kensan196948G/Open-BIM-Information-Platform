@@ -24,7 +24,31 @@ neonctl projects create --name open-bim-information-platform --org-id <org-id>
 neonctl connection-string --project-id <project-id> --branch main --role bim_user
 ```
 
+> **2026-08-18 実証済み**: Neon プロジェクト `open-bim-information-platform`
+> （project id `noisy-paper-35107522`・us-west-2）を作成し、空の `neondb` に対して
+> `CREATE EXTENSION uuid-ossp / pg_trgm` ＋ `prevent_audit_log_modification()` 関数の適用 →
+> `alembic upgrade head`（22 テーブル）→ `scripts/seed_mvp.py`（users=6 / orgs=2 / projects=3 /
+> containers=11）まで確認済み。アプリの一時起動でもログイン・承認タスク取得が動作。
+> 接続文字列は `postgresql+asyncpg://...?...&sslmode=require` 形式で利用する。
+
 自前PostgreSQLの場合は `docker-compose.prod.yml` の postgres サービスを使用する。
+
+### バックアップ（Tunnel/ホスト PostgreSQL 構成時）
+
+`scripts/backup.sh` は docker 構成（bim_postgres コンテナ）向けのため、ホスト PostgreSQL で
+運用している間は以下の手順で日次バックアップする（`BACKUP_ENCRYPTION_KEY` は `.env.production` を source）：
+
+```bash
+set -a; source .env.production; set +a
+TS=$(date +%Y%m%d-%H%M%S); TMP=$(mktemp -d)
+PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h 127.0.0.1 -U "$POSTGRES_USER" -d bim_prod | gzip > "$TMP/bim_prod.sql.gz"
+PGPASSWORD=bim_password pg_dump -h 127.0.0.1 -U bim_user -d bim_mvp | gzip > "$TMP/bim_mvp.sql.gz"
+tar -czf - -C "$TMP" . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_ENCRYPTION_KEY > "backups/backup-$TS.tar.gz.enc"
+rm -rf "$TMP"   # 世代管理: 7 日より古い backup-*.tar.gz.enc を削除
+```
+
+復元は `openssl enc -d ... | tar -xzO ./bim_<env>.sql.gz | gunzip | psql ...` で実施
+（2026-08-18 に分離コンテナへの復元演習済み: users=6 / containers=11 / projects=3）。
 
 ## 3. GitHub Secrets 設定
 
