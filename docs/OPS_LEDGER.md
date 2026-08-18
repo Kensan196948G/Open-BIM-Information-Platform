@@ -57,6 +57,9 @@
 | D3 | 運用恒久化（2026-08-18） | ✅ systemd user ユニット 6 本へ移行（enabled・Linger=yes）。`systemctl --user status open-bim-*` で全 active を確認 | `~/.config/systemd/user/open-bim-*.service` |
 | D1 | 空 DB への Migration + Seed 再実行（2026-08-18） | ✅ 空の PostgreSQL 15 コンテナ（bim_verify）へ `alembic upgrade head`（22 テーブル）→ `seed_mvp.py` を実行し、2 回目実行でも users=6 / orgs=2 / projects=3 / containers=11 で重複なし（冪等） | 本ログ（コンテナは検証後破棄） |
 | D2 | 実ブラウザ a11y・レスポンシブ・キーボード検証（2026-08-18） | ✅ 本番 URL で Playwright（chromium）検証 11/11: title/h1/ラベル付き入力/ボタン名/キーボード Tab 巡回/ログイン→ダッシュボード遷移/ナビ 10 リンク/モバイル 375px・デスクトップ 1440px で横スクロールなし/コンソールエラー 0 | Playwright スクリプト実行ログ（本ログ） |
+| D1 | バックアップ取得（2026-08-18 20:12） | ✅ bim_prod・bim_mvp を pg_dump → 暗号化バンドル作成（36KB・AES-256-CBC・世代保持 7 日） | `backups/backup-20260818-201244.tar.gz.enc` |
+| D1 | 復元演習（2026-08-18） | ✅ 暗号化バンドルを復号し bim_mvp を分離 PostgreSQL 15 コンテナへ復元 → users=6 / containers=11 / projects=3 を確認 | 本ログ（コンテナは検証後破棄） |
+| M3 | Neon 実環境での Migration + Seed 検証（2026-08-18） | ✅ Neon プロジェクト `open-bim-information-platform`（noisy-paper-35107522・us-west-2）を作成し、空の neondb へ `alembic upgrade head`（22 テーブル）→ `seed_mvp.py` 実行 → users=6 / orgs=2 / projects=3 / containers=11 / notifications=3 を確認。さらに一時バックエンドで同 DB にログイン・承認タスク取得が動作（DB 接続の実証） | Neon コンソール + 本ログ |
 
-> 備考: 本番環境（ドメイン・Secrets・監視通知先）確定後に、本番データでの復元演習と
-> SLO 計測を開始する（Issue #31）。
+> 備考: SSH デプロイ Secrets（PROD_*）・監視通知先は引き続き人間の提供待ち（Issue #31）。
+> 本番 DB の Neon 移行は、本検証を踏まえ Human Gate 承認後に実施可能。

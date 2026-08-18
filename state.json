@@ -131,7 +131,19 @@
     "runbook": "docs/OPERATIONS.md",
     "executor": "human (manual deploy required; CTO does not auto-deploy)",
     "signoff": "pending",
-    "phase0_gate": "一部完了（AV/バックアップ/SSO PoC実装済み・本番IdP接続と復元実績は未）"
+    "phase0_gate": "一部完了（AV/バックアップ/SSO PoC実装済み・本番IdP接続と復元実績は未）",
+    "neon": {
+      "project_id": "noisy-paper-35107522",
+      "name": "open-bim-information-platform",
+      "region": "aws-us-west-2",
+      "verified_at": "2026-08-18",
+      "note": "空の neondb へ alembic upgrade head（22テーブル）→ seed_mvp.py（users=6/orgs=2/projects=3/containers=11）を実証。アプリの一時起動でログイン・タスク取得も確認。本番 DB の Neon 移行は Human Gate 承認後に実施。"
+    },
+    "last_backup": {
+      "at": "2026-08-18T20:12+09:00",
+      "file": "backups/backup-20260818-201244.tar.gz.enc",
+      "restore_drill": "2026-08-18 users=6/containers=11/projects=3 復元確認"
+    }
   },
   "learning": {
     "failure_patterns": [
