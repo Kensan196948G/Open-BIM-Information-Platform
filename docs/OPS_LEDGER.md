@@ -55,6 +55,7 @@
 | D2 | 共有レート制限の実証 | ✅ 4 worker・25 並列 → 200×5 / 429×20（Redis 共有） | ステージング API 検証 |
 | D2 | MVP・本番 URL 復旧確認（2026-08-18） | ✅ 両 URL HTTP 200・ログイン（reviewer/engineer/platform-admin）・タスク一覧・通知・監査ログ・未認証 401・権限外 approve 403・正規 approve 200 を Tunnel 経由で確認 | 本ログ（インシデント記録参照） |
 | D3 | 運用恒久化（2026-08-18） | ✅ systemd user ユニット 6 本へ移行（enabled・Linger=yes）。`systemctl --user status open-bim-*` で全 active を確認 | `~/.config/systemd/user/open-bim-*.service` |
+| D1 | 空 DB への Migration + Seed 再実行（2026-08-18） | ✅ 空の PostgreSQL 15 コンテナ（bim_verify）へ `alembic upgrade head`（22 テーブル）→ `seed_mvp.py` を実行し、2 回目実行でも users=6 / orgs=2 / projects=3 / containers=11 で重複なし（冪等） | 本ログ（コンテナは検証後破棄） |
 
 > 備考: 本番環境（ドメイン・Secrets・監視通知先）確定後に、本番データでの復元演習と
 > SLO 計測を開始する（Issue #31）。
