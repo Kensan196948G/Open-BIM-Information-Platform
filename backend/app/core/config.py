@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
+    # MVP 公開デモ用のログイン認証バイパス。True のとき
+    # POST /api/v1/auth/demo-login が資格情報なしでトークンを払い出す。
+    # 既定は False。ENVIRONMENT が "production" の場合は設定値によらず無効。
+    AUTH_BYPASS: bool = False
+    AUTH_BYPASS_EMAIL: str = ""
+
     # Security
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60

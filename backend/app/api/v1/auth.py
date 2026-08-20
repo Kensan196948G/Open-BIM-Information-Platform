@@ -176,6 +176,63 @@ async def login(
     )
 
 
+def _auth_bypass_enabled() -> bool:
+    """MVP 公開デモ用のログイン認証バイパスが有効かどうか。
+
+    AUTH_BYPASS=True のときだけ有効。さらに ENVIRONMENT が "production" の
+    場合は設定値によらず必ず無効にする（安全装置）。
+    """
+    if not settings.AUTH_BYPASS:
+        return False
+    return settings.ENVIRONMENT.strip().lower() != "production"
+
+
+@router.post("/demo-login", response_model=TokenResponse, include_in_schema=False)
+async def demo_login(request: Request, db: DB) -> TokenResponse:
+    """MVP 公開デモ: 資格情報なしでデモ利用者のトークンを払い出す。
+
+    バイパスが無効な環境では 404 を返し、この経路の存在自体を露出しない。
+    対象は AUTH_BYPASS_EMAIL のユーザー。未指定なら在籍中の管理者を1件採用し、
+    該当者が居なければ払い出さない（フェイルクローズ）。
+    """
+    if not _auth_bypass_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+    if settings.AUTH_BYPASS_EMAIL:
+        stmt = select(User).where(
+            User.email == settings.AUTH_BYPASS_EMAIL, User.is_active.is_(True)
+        )
+    else:
+        stmt = (
+            select(User)
+            .where(User.is_active.is_(True))
+            .order_by(User.created_at)
+            .limit(1)
+        )
+    user = (await db.execute(stmt)).scalars().first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
+    record_audit(
+        db,
+        event_type="user.login",
+        operation="login",
+        target_type="user",
+        target_id=user.id,
+        actor_id=user.id,
+        actor_ip=_client_ip(request),
+        result="success",
+        reason="mvp demo bypass",
+    )
+    await db.commit()
+
+    return TokenResponse(
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),
+        token_type="bearer",
+    )
+
+
 @router.post(
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )

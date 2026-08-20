@@ -337,3 +337,64 @@ async def test_change_password_requires_auth(client: AsyncClient):
         },
     )
     assert res.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# MVP 公開デモ用のログイン認証バイパス (POST /api/v1/auth/demo-login)
+# ---------------------------------------------------------------------------
+
+
+async def test_demo_login_disabled_by_default(client: AsyncClient):
+    """既定では経路の存在自体を隠す 404。"""
+    from app.core.config import settings
+
+    assert settings.AUTH_BYPASS is False
+    res = await client.post("/api/v1/auth/demo-login")
+    assert res.status_code == 404
+
+
+async def test_demo_login_issues_token_when_enabled(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    """有効化した環境では資格情報なしでトークンが払い出され、/me が通る。"""
+    from app.core.config import settings
+
+    await _register(client, email="demo@example.com", username="demouser")
+    monkeypatch.setattr(settings, "AUTH_BYPASS", True)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "mvp")
+
+    res = await client.post("/api/v1/auth/demo-login")
+    assert res.status_code == 200
+    token = res.json()["access_token"]
+    me = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert me.status_code == 200
+
+
+async def test_demo_login_never_bypasses_production(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    """ENVIRONMENT=production では AUTH_BYPASS=True でも必ず 404（安全装置）。"""
+    from app.core.config import settings
+
+    await _register(client, email="prod@example.com", username="produser")
+    monkeypatch.setattr(settings, "AUTH_BYPASS", True)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+
+    res = await client.post("/api/v1/auth/demo-login")
+    assert res.status_code == 404
+
+
+async def test_demo_login_unknown_email_fails_closed(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    """AUTH_BYPASS_EMAIL に該当者が居なければ払い出さない。"""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "AUTH_BYPASS", True)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "mvp")
+    monkeypatch.setattr(settings, "AUTH_BYPASS_EMAIL", "nobody@example.invalid")
+
+    res = await client.post("/api/v1/auth/demo-login")
+    assert res.status_code == 404
