@@ -31,6 +31,45 @@ export async function downloadFile(
   return res.data;
 }
 
+async function fetchDownload(path: string): Promise<Response> {
+  const request = (token: string | null) =>
+    fetch(path, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  let response = await request(localStorage.getItem("access_token"));
+  if (response.status === 401) {
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (refreshToken) {
+      const refreshed = await api.post<{ access_token: string; refresh_token: string }>(
+        "/auth/refresh",
+        { refresh_token: refreshToken },
+      );
+      localStorage.setItem("access_token", refreshed.data.access_token);
+      localStorage.setItem("refresh_token", refreshed.data.refresh_token);
+      response = await request(refreshed.data.access_token);
+    }
+  }
+  if (response.status === 401) {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    window.location.href = "/login";
+  }
+  if (!response.ok) throw new Error(`Download failed (${response.status})`);
+  return response;
+}
+
+export async function downloadFileToWritable(
+  projectId: string,
+  containerId: string,
+  fileId: string,
+  writable: FileSystemWritableFileStream,
+): Promise<void> {
+  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/containers/${encodeURIComponent(containerId)}/files/${encodeURIComponent(fileId)}/download`;
+  const response = await fetchDownload(path);
+  if (!response.body) throw new Error("Download stream is unavailable");
+  await response.body.pipeTo(writable);
+}
+
 export async function listContainers(
   projectId: string,
   params?: { state?: string; page?: number; size?: number },

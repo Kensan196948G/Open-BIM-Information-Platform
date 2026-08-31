@@ -182,7 +182,7 @@ def _auth_bypass_enabled() -> bool:
     AUTH_BYPASS=True のときだけ有効。さらに ENVIRONMENT が "production" の
     場合は設定値によらず必ず無効にする（安全装置）。
     """
-    if not settings.AUTH_BYPASS:
+    if not settings.AUTH_BYPASS or not settings.AUTH_BYPASS_EMAIL.strip():
         return False
     return settings.ENVIRONMENT.strip().lower() != "production"
 
@@ -192,23 +192,16 @@ async def demo_login(request: Request, db: DB) -> TokenResponse:
     """MVP 公開デモ: 資格情報なしでデモ利用者のトークンを払い出す。
 
     バイパスが無効な環境では 404 を返し、この経路の存在自体を露出しない。
-    対象は AUTH_BYPASS_EMAIL のユーザー。未指定なら在籍中の管理者を1件採用し、
+    対象は AUTH_BYPASS_EMAIL で明示したユーザーに限定し、未指定または
     該当者が居なければ払い出さない（フェイルクローズ）。
     """
     if not _auth_bypass_enabled():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
-    if settings.AUTH_BYPASS_EMAIL:
-        stmt = select(User).where(
-            User.email == settings.AUTH_BYPASS_EMAIL, User.is_active.is_(True)
-        )
-    else:
-        stmt = (
-            select(User)
-            .where(User.is_active.is_(True))
-            .order_by(User.created_at)
-            .limit(1)
-        )
+    await _login_rate_limit(request)
+    stmt = select(User).where(
+        User.email == settings.AUTH_BYPASS_EMAIL.strip(), User.is_active.is_(True)
+    )
     user = (await db.execute(stmt)).scalars().first()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")

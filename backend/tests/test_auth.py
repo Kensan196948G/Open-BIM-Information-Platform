@@ -362,6 +362,7 @@ async def test_demo_login_issues_token_when_enabled(
     await _register(client, email="demo@example.com", username="demouser")
     monkeypatch.setattr(settings, "AUTH_BYPASS", True)
     monkeypatch.setattr(settings, "ENVIRONMENT", "mvp")
+    monkeypatch.setattr(settings, "AUTH_BYPASS_EMAIL", "demo@example.com")
 
     res = await client.post("/api/v1/auth/demo-login")
     assert res.status_code == 200
@@ -381,9 +382,39 @@ async def test_demo_login_never_bypasses_production(
     await _register(client, email="prod@example.com", username="produser")
     monkeypatch.setattr(settings, "AUTH_BYPASS", True)
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(settings, "AUTH_BYPASS_EMAIL", "prod@example.com")
 
     res = await client.post("/api/v1/auth/demo-login")
     assert res.status_code == 404
+
+
+async def test_demo_login_requires_explicit_email(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    from app.core.config import settings
+
+    await _register(client, email="fallback@example.com", username="fallback")
+    monkeypatch.setattr(settings, "AUTH_BYPASS", True)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "mvp")
+    monkeypatch.setattr(settings, "AUTH_BYPASS_EMAIL", "")
+
+    res = await client.post("/api/v1/auth/demo-login")
+    assert res.status_code == 404
+
+
+async def test_demo_login_is_rate_limited(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    from app.core.config import settings
+
+    await _register(client, email="limited@example.com", username="limited")
+    monkeypatch.setattr(settings, "AUTH_BYPASS", True)
+    monkeypatch.setattr(settings, "ENVIRONMENT", "mvp")
+    monkeypatch.setattr(settings, "AUTH_BYPASS_EMAIL", "limited@example.com")
+    monkeypatch.setattr(settings, "LOGIN_RATE_LIMIT", 1)
+
+    assert (await client.post("/api/v1/auth/demo-login")).status_code == 200
+    assert (await client.post("/api/v1/auth/demo-login")).status_code == 429
 
 
 async def test_demo_login_unknown_email_fails_closed(

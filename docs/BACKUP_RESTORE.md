@@ -8,6 +8,7 @@
 # 環境変数（.env または systemd EnvironmentFile）
 BACKUP_DIR=/mnt/backup/bim
 BACKUP_ENCRYPTION_KEY=<openssl rand -hex 32 で生成した鍵>
+BACKUP_MAINTENANCE_CONFIRMED=false  # full backup実行時だけ、書込み停止確認後にtrue
 POSTGRES_BACKUP_MODE=host  # Local PostgreSQL。Compose内DBは compose
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
@@ -68,6 +69,11 @@ DB-only と完全バックアップの retention は分離され、DB-only 実�
 DBレコード数とMinIO object数が一致することを検証する。不一致時はexit code 1で終了し、
 完全バックアップ成果物を生成しない。DB-onlyはこの検査を意図的に省略するため、障害復旧時の
 ファイル復元には使用できない。
+
+DB dumpとMinIO mirrorを同一の復元時点として扱うには、backendへの書込みを停止した
+maintenance window内で連続実行する。書込み停止と対象DB/MinIOの確認後に限り、実行時環境へ
+`BACKUP_MAINTENANCE_CONFIRMED=true`を渡す。未確認のfull backupはscriptが拒否する。
+将来object versioningとDB snapshotで世代を固定するまでは、通常稼働中にこのflagを恒常設定しない。
 
 バックアップファイルは**アプリとは別の障害ドメイン**（NAS・別拠点・オブジェクトストレージ）へ
 コピーしてください。

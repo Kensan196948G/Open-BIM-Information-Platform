@@ -54,7 +54,11 @@ DB_ONLY=false
 if [[ -f "$TMP_DIR/minio.NOT_INCLUDED" ]]; then DB_ONLY=true; fi
 DB_FILE_COUNT=$(docker compose -f docker-compose.restore.yml exec -T postgres \
   psql -v ON_ERROR_STOP=1 -U bim_user -d bim_platform -tAc \
-  "SELECT count(*) FROM container_files")
+  "SELECT count(*) FROM container_files" | tr -d '[:space:]')
+[[ "$DB_FILE_COUNT" =~ ^[0-9]+$ ]] || {
+  echo "❌ container_files件数を取得できません: $DB_FILE_COUNT" >&2
+  exit 1
+}
 
 echo "📦 MinIO mirror..."
 MINIO_SRC_DIR="$(find "$TMP_DIR/minio" -mindepth 1 -maxdepth 1 -type d | head -1 || true)"
@@ -94,24 +98,39 @@ echo "🔎 検証: 全ファイルSHA-256"
 if [[ "$DB_ONLY" == "true" ]]; then
   echo "  ⚠️  DB-only backup のためファイル検証対象外"
 else
-  mapfile -t FILES < <(docker compose -f docker-compose.restore.yml exec -T postgres \
+  docker compose -f docker-compose.restore.yml exec -T postgres \
     psql -U bim_user -d bim_platform -tAc \
-    "SELECT storage_key || '|' || checksum_sha256 FROM container_files ORDER BY created_at")
+    "SELECT storage_key || '|' || coalesce(checksum_sha256, '') FROM container_files ORDER BY created_at" \
+    > "$TMP_DIR/files-to-verify.txt"
+  mapfile -t FILES < "$TMP_DIR/files-to-verify.txt"
+  VERIFIED=0
   for ENTRY in "${FILES[@]}"; do
-    [[ -z "$ENTRY" ]] && continue
+    if [[ -z "$ENTRY" ]]; then
+      echo "  ❌ storage_keyが空のfile recordを検出" >&2
+      exit 1
+    fi
     KEY="${ENTRY%%|*}"
     EXPECTED="${ENTRY##*|}"
+    if [[ -z "$EXPECTED" ]]; then
+      echo "  ❌ $KEY  checksum_sha256が未設定" >&2
+      exit 1
+    fi
     ACTUAL=$(docker run --rm \
       --network bim_platform_restore_net \
       -e "MC_HOST_restore=http://minioadmin:minioadmin123@minio:9000" \
       minio/mc cat "restore/bim-containers/$KEY" | sha256sum | cut -d' ' -f1)
     if [[ "$ACTUAL" == "$EXPECTED" ]]; then
       echo "  ✅ $KEY"
+      VERIFIED=$((VERIFIED + 1))
     else
       echo "  ❌ $KEY  hash不一致 (expected=$EXPECTED actual=$ACTUAL)" >&2
       exit 1
     fi
   done
+  if [[ "$VERIFIED" -ne "$DB_FILE_COUNT" ]]; then
+    echo "❌ SHA-256検証件数がDB件数と一致しません (DB=$DB_FILE_COUNT verified=$VERIFIED)" >&2
+    exit 1
+  fi
 fi
 
 END_TS="$(date +%s)"

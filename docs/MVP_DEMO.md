@@ -11,7 +11,7 @@
 | 項目 | 内容 |
 |---|---|
 | 目的 | 主要ユースケース（登録・検索・一覧・詳細・承認・通知・監査・RBAC）を一通り操作・評価できる MVP |
-| 構成 | FastAPI (backend) + React 19/TS/Vite (frontend) + PostgreSQL 15 + MinIO + Redis |
+| 構成 | FastAPI (backend) + React 19/TS/Vite (frontend) + Local PostgreSQL 16 + MinIO + Redis |
 | データ | 架空デモデータ（`scripts/seed_mvp.py` で再生成可能） |
 | ログイン | デモユーザー（下記）・パスワードは全て `DemoPass123!` |
 | **公開 URL（レビュー用）** | **https://open-bim-mvp.mirai-dx-platform.com**（Cloudflare Tunnel） |
@@ -23,8 +23,8 @@
 
 ### 前提
 
-- Docker Compose またはローカルの PostgreSQL 15 / Redis / MinIO
-- Python 3.11+（backend）、Node.js 20+（frontend）
+- Docker Compose PostgreSQL 15.10 またはローカルの PostgreSQL 16 / Redis / MinIO
+- Python 3.11+（backend）、Node.js 22.22+（frontend）
 
 ### 1. DB マイグレーション
 
@@ -50,6 +50,7 @@ export DATABASE_URL="postgresql+asyncpg://bim_user:bim_password@localhost:5432/b
   ENVIRONMENT=development \
   SECRET_KEY="開発用の十分に長い秘密鍵（32文字以上）" \
   RATE_LIMIT_BACKEND=memory \
+  AUTH_BYPASS=false \
   CORS_ORIGINS="http://localhost:5173"
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
@@ -77,6 +78,11 @@ VITE_API_BASE_URL="http://localhost:8000" npm run dev
 | `designer@ozora.example.jp` | メンバー | おおぞら設計株式会社 | 設計コンテナ作成 |
 
 パスワード（全ユーザー共通）: **`DemoPass123!`**
+
+公開MVPで資格情報入力を省略する場合に限り、`AUTH_BYPASS=true`と
+`AUTH_BYPASS_EMAIL=<上表の単一デモユーザー>`を同時に設定する。email未指定・該当利用者なしは
+404となり、production環境では設定値によらず無効になる。demo loginにも通常loginと同じ
+IP単位rate limitを適用するため、実在利用者や本番データには使用しない。
 
 ---
 

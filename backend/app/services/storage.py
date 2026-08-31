@@ -3,6 +3,7 @@
 import hashlib
 import io
 import re
+import tempfile
 import uuid
 from pathlib import PurePosixPath
 
@@ -12,6 +13,11 @@ from botocore.exceptions import ClientError
 from app.core.config import settings
 
 _s3_client = None
+VERIFIED_DOWNLOAD_MEMORY_LIMIT = 8 * 1024 * 1024
+
+
+class StorageIntegrityError(Exception):
+    """The stored object bytes do not match the database checksum."""
 
 
 def get_s3_client():
@@ -90,6 +96,32 @@ def open_file(storage_key: str):
     """Open an object for authenticated API streaming."""
     response = get_s3_client().get_object(Bucket=settings.MINIO_BUCKET, Key=storage_key)
     return response["Body"]
+
+
+def open_verified_file(
+    storage_key: str, expected_sha256: str
+) -> tempfile.SpooledTemporaryFile[bytes]:
+    """Download to bounded-memory temporary storage and verify before serving."""
+    body = open_file(storage_key)
+    output = tempfile.SpooledTemporaryFile(max_size=VERIFIED_DOWNLOAD_MEMORY_LIMIT)
+    digest = hashlib.sha256()
+    try:
+        for chunk in body.iter_chunks(chunk_size=1024 * 1024):
+            if not chunk:
+                continue
+            digest.update(chunk)
+            output.write(chunk)
+    except Exception:
+        output.close()
+        raise
+    finally:
+        body.close()
+
+    if digest.hexdigest() != expected_sha256:
+        output.close()
+        raise StorageIntegrityError("Stored object checksum mismatch")
+    output.seek(0)
+    return output
 
 
 def delete_file(storage_key: str) -> None:

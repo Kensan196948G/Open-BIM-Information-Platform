@@ -16,6 +16,9 @@ on:
         default: "main"
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Deploy to ${{ inputs.environment }}

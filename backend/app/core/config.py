@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # POST /api/v1/auth/demo-login が資格情報なしでトークンを払い出す。
     # 既定は False。ENVIRONMENT が "production" の場合は設定値によらず無効。
     AUTH_BYPASS: bool = False
+    # Required when AUTH_BYPASS=true. Never fall back to an arbitrary user.
     AUTH_BYPASS_EMAIL: str = ""
 
     # Security

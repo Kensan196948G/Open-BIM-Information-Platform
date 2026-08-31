@@ -372,6 +372,33 @@ async def test_download_requires_auth(client: AsyncClient):
 
 @needs_moto
 @pytest.mark.asyncio
+async def test_download_rejects_checksum_mismatch(client: AsyncClient, mock_s3):
+    from app.services import storage as storage_svc
+
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "corrupt@ex.com", "corrupt")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+    upload_res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("drawing.pdf", b"original", "application/pdf")},
+    )
+    uploaded = upload_res.json()
+    storage_svc.get_s3_client().put_object(
+        Bucket="bim-containers", Key=uploaded["storage_key"], Body=b"corrupt"
+    )
+
+    response = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files/{uploaded['id']}/download",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"] == "File integrity check failed"
+
+
+@needs_moto
+@pytest.mark.asyncio
 async def test_list_files_returns_uploads(client: AsyncClient, mock_s3):
     """GET /files returns uploaded files with metadata (newest first)."""
     org_id, proj_id = await _setup_org_project()

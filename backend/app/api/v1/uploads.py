@@ -6,6 +6,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.deps import DB, CurrentUser
@@ -454,7 +455,16 @@ async def download_file(
         )
 
     try:
-        body = storage_svc.open_file(file_record.storage_key)
+        body = await run_in_threadpool(
+            storage_svc.open_verified_file,
+            file_record.storage_key,
+            file_record.checksum_sha256,
+        )
+    except storage_svc.StorageIntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="File integrity check failed",
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -466,7 +476,8 @@ async def download_file(
 
     def chunks():
         try:
-            yield from body.iter_chunks(chunk_size=1024 * 1024)
+            while chunk := body.read(1024 * 1024):
+                yield chunk
         finally:
             body.close()
 

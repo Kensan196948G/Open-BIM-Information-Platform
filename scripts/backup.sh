@@ -46,6 +46,11 @@ if [[ -z "${BACKUP_ENCRYPTION_KEY:-}" ]]; then
   exit 1
 fi
 
+if [[ "$MINIO_BACKUP_MODE" != "skip" && "${BACKUP_MAINTENANCE_CONFIRMED:-false}" != "true" ]]; then
+  echo "❌ full backupには書込み停止の確認（BACKUP_MAINTENANCE_CONFIRMED=true）が必要です" >&2
+  exit 1
+fi
+
 TMP_DIR="$(mktemp -d)"
 mkdir -p "$BACKUP_DIR"
 
@@ -133,7 +138,7 @@ if [[ "$MINIO_BACKUP_MODE" != "skip" ]]; then
       docker compose -f "$COMPOSE_FILE" exec -T postgres \
         psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-bim_user}" \
           -d "${POSTGRES_DB:-bim_platform}" -tAc \
-          "SELECT storage_key FROM container_files ORDER BY storage_key" \
+          "SELECT DISTINCT storage_key FROM container_files ORDER BY storage_key" \
         > "$TMP_DIR/storage-keys.txt"
       ;;
     host)
@@ -143,7 +148,7 @@ if [[ "$MINIO_BACKUP_MODE" != "skip" ]]; then
           --port "${POSTGRES_PORT:-5432}" \
           --username "${POSTGRES_USER:-bim_user}" \
           --dbname "${POSTGRES_DB:-bim_platform}" -tAc \
-          "SELECT storage_key FROM container_files ORDER BY storage_key" \
+          "SELECT DISTINCT storage_key FROM container_files ORDER BY storage_key" \
         > "$TMP_DIR/storage-keys.txt"
       ;;
   esac
