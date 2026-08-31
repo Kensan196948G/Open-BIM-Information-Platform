@@ -9,7 +9,7 @@
 #   1) 復号・展開
 #   2) 隔離用 PostgreSQL / MinIO を起動（docker-compose.restore.yml）
 #   3) DB リストア / MinIO mirror
-#   4) 件数・監査トリガー・ファイルSHA-256 を検証
+#   4) 件数・監査トリガー・全ファイルSHA-256 を検証
 #   5) RPO/RTO 相当時間を出力
 #
 set -euo pipefail
@@ -48,22 +48,32 @@ docker compose -f docker-compose.restore.yml up -d --wait postgres minio
 echo "💾 PostgreSQL リストア..."
 gunzip -c "$TMP_DIR/postgres.sql.gz" \
   | docker compose -f docker-compose.restore.yml exec -T postgres \
-      psql -U bim_user -d bim_platform
+      psql -v ON_ERROR_STOP=1 -U bim_user -d bim_platform
+
+DB_ONLY=false
+if [[ -f "$TMP_DIR/minio.NOT_INCLUDED" ]]; then DB_ONLY=true; fi
+DB_FILE_COUNT=$(docker compose -f docker-compose.restore.yml exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U bim_user -d bim_platform -tAc \
+  "SELECT count(*) FROM container_files")
 
 echo "📦 MinIO mirror..."
 MINIO_SRC_DIR="$(find "$TMP_DIR/minio" -mindepth 1 -maxdepth 1 -type d | head -1 || true)"
 if [[ -z "$MINIO_SRC_DIR" ]]; then
-  echo "  ⚠️  MinIOバックアップディレクトリが見つからないためスキップ" 
+  if [[ "$DB_ONLY" == "false" && "$DB_FILE_COUNT" -gt 0 ]]; then
+    echo "❌ 完全バックアップにMinIO objectがありません (DB=$DB_FILE_COUNT)" >&2
+    exit 1
+  fi
+  echo "  ⚠️  MinIOバックアップ対象なし"
 else
-docker run --rm \
-  --network bim_platform_restore_net \
-  -e "MC_HOST_restore=http://minioadmin:minioadmin123@minio:9000" \
-  minio/mc --config-dir /tmp/.mc mb --ignore-existing restore/bim-containers
-docker run --rm \
-  --network bim_platform_restore_net \
-  -e "MC_HOST_restore=http://minioadmin:minioadmin123@minio:9000" \
-  -v "$TMP_DIR/minio:/backup:ro" \
-  minio/mc --config-dir /tmp/.mc mirror --overwrite "/backup/$(basename "$MINIO_SRC_DIR")" restore/bim-containers
+  docker run --rm \
+    --network bim_platform_restore_net \
+    -e "MC_HOST_restore=http://minioadmin:minioadmin123@minio:9000" \
+    minio/mc --config-dir /tmp/.mc mb --ignore-existing restore/bim-containers
+  docker run --rm \
+    --network bim_platform_restore_net \
+    -e "MC_HOST_restore=http://minioadmin:minioadmin123@minio:9000" \
+    -v "$TMP_DIR/minio:/backup:ro" \
+    minio/mc --config-dir /tmp/.mc mirror --overwrite "/backup/$(basename "$MINIO_SRC_DIR")" restore/bim-containers
 fi
 
 echo "🔎 検証: レコード件数"
@@ -80,25 +90,29 @@ TRIGGER=$(docker compose -f docker-compose.restore.yml exec -T postgres \
 echo "  trigger: ${TRIGGER:-MISSING}"
 [[ "$TRIGGER" == "audit_logs_no_modify" ]] || { echo "❌ 監査トリガーがありません" >&2; exit 1; }
 
-echo "🔎 検証: ファイルSHA-256（先頭5件）"
-mapfile -t FILES < <(docker compose -f docker-compose.restore.yml exec -T postgres \
-  psql -U bim_user -d bim_platform -tAc \
-  "SELECT storage_key || '|' || checksum_sha256 FROM container_files ORDER BY created_at LIMIT 5")
-for ENTRY in "${FILES[@]}"; do
-  [[ -z "$ENTRY" ]] && continue
-  KEY="${ENTRY%%|*}"
-  EXPECTED="${ENTRY##*|}"
-  ACTUAL=$(docker run --rm \
-    --network bim_platform_restore_net \
-    -e "MC_HOST_restore=http://minioadmin:minioadmin123@minio:9000" \
-    minio/mc cat "restore/bim-containers/$KEY" | sha256sum | cut -d' ' -f1)
-  if [[ "$ACTUAL" == "$EXPECTED" ]]; then
-    echo "  ✅ $KEY"
-  else
-    echo "  ❌ $KEY  hash不一致 (expected=$EXPECTED actual=$ACTUAL)" >&2
-    exit 1
-  fi
-done
+echo "🔎 検証: 全ファイルSHA-256"
+if [[ "$DB_ONLY" == "true" ]]; then
+  echo "  ⚠️  DB-only backup のためファイル検証対象外"
+else
+  mapfile -t FILES < <(docker compose -f docker-compose.restore.yml exec -T postgres \
+    psql -U bim_user -d bim_platform -tAc \
+    "SELECT storage_key || '|' || checksum_sha256 FROM container_files ORDER BY created_at")
+  for ENTRY in "${FILES[@]}"; do
+    [[ -z "$ENTRY" ]] && continue
+    KEY="${ENTRY%%|*}"
+    EXPECTED="${ENTRY##*|}"
+    ACTUAL=$(docker run --rm \
+      --network bim_platform_restore_net \
+      -e "MC_HOST_restore=http://minioadmin:minioadmin123@minio:9000" \
+      minio/mc cat "restore/bim-containers/$KEY" | sha256sum | cut -d' ' -f1)
+    if [[ "$ACTUAL" == "$EXPECTED" ]]; then
+      echo "  ✅ $KEY"
+    else
+      echo "  ❌ $KEY  hash不一致 (expected=$EXPECTED actual=$ACTUAL)" >&2
+      exit 1
+    fi
+  done
+fi
 
 END_TS="$(date +%s)"
 ELAPSED=$((END_TS - START_TS))

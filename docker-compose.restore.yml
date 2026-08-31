@@ -8,7 +8,7 @@ name: bim-restore
 
 services:
   postgres:
-    image: postgres:15.10-alpine
+    image: postgres:16.14-alpine
     container_name: bim_restore_postgres
     environment:
       POSTGRES_DB: bim_platform

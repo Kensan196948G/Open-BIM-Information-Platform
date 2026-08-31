@@ -19,15 +19,16 @@ export async function deleteFile(
   await api.delete(`/projects/${projectId}/containers/${containerId}/files/${fileId}`);
 }
 
-export async function getDownloadUrl(
+export async function downloadFile(
   projectId: string,
   containerId: string,
   fileId: string,
-): Promise<string> {
-  const res = await api.get<{ download_url: string }>(
-    `/projects/${projectId}/containers/${containerId}/files/${fileId}/download-url`,
+): Promise<Blob> {
+  const res = await api.get<Blob>(
+    `/projects/${projectId}/containers/${containerId}/files/${fileId}/download`,
+    { responseType: "blob" },
   );
-  return res.data.download_url;
+  return res.data;
 }
 
 export async function listContainers(

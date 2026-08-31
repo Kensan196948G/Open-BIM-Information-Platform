@@ -37,14 +37,15 @@ run_local() {
 
   echo "🔍 スモーク: /health"
   HEALTH_URL="${HEALTH_URL:-http://127.0.0.1/health}"
-  for i in $(seq 1 30); do
-    if curl -sf "$HEALTH_URL" >/dev/null 2>&1; then
+  for _ in $(seq 1 30); do
+    if curl -fsS --max-time 10 "$HEALTH_URL" 2>/dev/null \
+      | python3 "$PROJECT_DIR/scripts/validate_health_response.py"; then
       echo "✅ /health OK"
       return 0
     fi
     sleep 2
   done
-  echo "❌ /health が応答しません" >&2
+  echo "❌ /health が正常なJSONを返しません（status/database=ok を期待）" >&2
   return 1
 }
 

@@ -336,6 +336,42 @@ async def test_upload_then_get_download_url(client: AsyncClient, mock_s3):
 
 @needs_moto
 @pytest.mark.asyncio
+async def test_upload_then_download_through_authenticated_api(
+    client: AsyncClient, mock_s3
+):
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "download@ex.com", "download")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+    content = b"BIM download through API"
+
+    upload_res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("drawing.pdf", content, "application/pdf")},
+    )
+    file_id = upload_res.json()["id"]
+
+    download_res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files/{file_id}/download",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert download_res.status_code == 200
+    assert download_res.content == content
+    assert download_res.headers["content-type"] == "application/octet-stream"
+    assert "attachment" in download_res.headers["content-disposition"]
+    assert download_res.headers["x-content-type-options"] == "nosniff"
+
+
+async def test_download_requires_auth(client: AsyncClient):
+    res = await client.get(
+        f"/api/v1/projects/fake/containers/fake/files/{uuid.uuid4()}/download"
+    )
+    assert res.status_code == 401
+
+
+@needs_moto
+@pytest.mark.asyncio
 async def test_list_files_returns_uploads(client: AsyncClient, mock_s3):
     """GET /files returns uploaded files with metadata (newest first)."""
     org_id, proj_id = await _setup_org_project()

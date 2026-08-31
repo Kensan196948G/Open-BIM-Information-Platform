@@ -1,8 +1,10 @@
 import re
 import uuid
 from pathlib import PurePosixPath
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 
 from app.core.config import settings
@@ -423,3 +425,59 @@ async def get_download_url(
         ) from exc
 
     return {"download_url": url, "expires_in_seconds": 3600}
+
+
+@router.get("/files/{file_id}/download", response_class=StreamingResponse)
+async def download_file(
+    project_id: str,
+    container_id: str,
+    file_id: str,
+    current_user: CurrentUser,
+    db: DB,
+) -> StreamingResponse:
+    """Stream a file through the authenticated API.
+
+    Public clients must not receive a presigned URL containing an internal or
+    loopback MinIO endpoint.
+    """
+    await _get_container_or_403(project_id, container_id, current_user, db)
+    result = await db.execute(
+        select(ContainerFile).where(
+            ContainerFile.id == file_id,
+            ContainerFile.container_id == container_id,
+        )
+    )
+    file_record = result.scalar_one_or_none()
+    if not file_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
+        )
+
+    try:
+        body = storage_svc.open_file(file_record.storage_key)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Storage service unavailable",
+        ) from exc
+
+    ascii_name = re.sub(r"[^A-Za-z0-9._-]", "_", file_record.original_filename)[:200]
+    encoded_name = quote(file_record.original_filename[:500], safe="")
+
+    def chunks():
+        try:
+            yield from body.iter_chunks(chunk_size=1024 * 1024)
+        finally:
+            body.close()
+
+    return StreamingResponse(
+        chunks(),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded_name}"
+            ),
+            "Content-Length": str(file_record.file_size_bytes),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

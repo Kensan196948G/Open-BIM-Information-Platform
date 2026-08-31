@@ -9,7 +9,7 @@
 set -uo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$PROJECT_DIR"
+cd "$PROJECT_DIR" || exit 2
 
 WARNINGS=()
 CRITICALS=()
@@ -23,10 +23,11 @@ note() {
 
 # 1) 死活
 if [[ -n "${MONITOR_HEALTH_URL:-}" ]]; then
-  if curl -sf --max-time 10 "$MONITOR_HEALTH_URL" >/dev/null 2>&1; then
+  if curl -fsS --max-time 10 "$MONITOR_HEALTH_URL" 2>/dev/null \
+    | python3 "$PROJECT_DIR/scripts/validate_health_response.py"; then
     echo "[OK] health: $MONITOR_HEALTH_URL"
   else
-    note CRIT "health 応答なし: $MONITOR_HEALTH_URL"
+    note CRIT "health 応答が不正（JSON status/database=ok を期待）: $MONITOR_HEALTH_URL"
   fi
 fi
 
@@ -46,7 +47,9 @@ fi
 
 # 4) バックアップ鮮度
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/backups}"
-NEWEST=$(ls -t "$BACKUP_DIR"/backup-*.tar.gz.enc 2>/dev/null | head -1 || true)
+NEWEST=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'backup-*.tar.gz.enc' \
+  ! -name 'backup-db-only-*' \
+  -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2- || true)
 if [[ -n "$NEWEST" ]]; then
   AGE_H=$(( ($(date +%s) - $(stat -c %Y "$NEWEST")) / 3600 ))
   if (( AGE_H > 26 )); then note CRIT "バックアップが ${AGE_H} 時間前（24h以内を期待）"

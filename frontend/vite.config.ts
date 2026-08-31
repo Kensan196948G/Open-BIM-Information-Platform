@@ -3,6 +3,18 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+const backendTarget = process.env.VITE_API_BASE_URL || "http://localhost:8000";
+const backendProxy = {
+  "/api": {
+    target: backendTarget,
+    changeOrigin: true,
+  },
+  "/health": {
+    target: backendTarget,
+    changeOrigin: true,
+  },
+};
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -12,12 +24,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      "/api": {
-        target: process.env.VITE_API_BASE_URL || "http://localhost:8000",
-        changeOrigin: true,
-      },
-    },
+    proxy: backendProxy,
   },
   preview: {
     port: 4173,
@@ -27,12 +34,7 @@ export default defineConfig({
       "open-bim-mvp.mirai-dx-platform.com",
       "open-bim.mirai-dx-platform.com",
     ],
-    proxy: {
-      "/api": {
-        target: process.env.VITE_API_BASE_URL || "http://localhost:8000",
-        changeOrigin: true,
-      },
-    },
+    proxy: backendProxy,
   },
   test: {
     globals: true,

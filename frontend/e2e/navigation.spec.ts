@@ -67,6 +67,21 @@ test.describe("Authenticated navigation", () => {
 });
 
 test.describe("Static routing", () => {
+  test("/health proxies the backend health contract", async ({ request }) => {
+    test.skip(
+      !process.env.VITE_API_BASE_URL,
+      "Requires running backend (set VITE_API_BASE_URL)",
+    );
+
+    const response = await request.get("/health");
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("application/json");
+    expect(await response.json()).toMatchObject({
+      status: "ok",
+      database: "ok",
+    });
+  });
+
   test("/ redirects to /dashboard or /login", async ({ page }) => {
     await page.goto("/");
     // Wait for client-side redirect to settle (unauthenticated → /login)

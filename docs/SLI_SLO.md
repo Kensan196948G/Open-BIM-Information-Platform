@@ -6,7 +6,7 @@
 
 | SLI | 定義 | 計測方法 |
 |---|---|---|
-| 可用性 | `/health` が 200 を返した時間割合 | ヘルスチェックプローブ（例: 30秒間隔） |
+| 可用性 | `/health` が 200 かつ JSON `status=ok` / `database=ok` を返した時間割合 | ヘルスチェックプローブ（例: 30秒間隔） |
 | 応答時間 | API 主要エンドポイントの p95 応答時間 | アプリログのレイテンシ集計 |
 | エラー率 | 5xx 応答 / 全応答 | アプリログ・リバースプロキシログ |
 | バックアップ成功率 | 日次バックアップの成功数 / 実行数 | バックアップスクリプトの exit code |
@@ -34,7 +34,7 @@
 
 ## 4. 監視対象と確認方法（本番環境確定後）
 
-- 死活: `GET /health`（DB必須・Redis参考）
+- 死活: `GET /health`（HTTP 200だけでなく JSON `status=ok` / `database=ok` を検証。DB必須・Redis参考）
 - リソース: `docker stats` / `df -h`（スクリプト化推奨）
 - ログ: `docker compose logs` / journald（構造化ログは structlog）
 - バックアップ: `scripts/backup.sh` の exit code と出力

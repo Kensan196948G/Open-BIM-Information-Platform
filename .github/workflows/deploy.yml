@@ -51,8 +51,12 @@ jobs:
         run: |
           HEALTH_URL="${HEALTH_URL:-https://$(echo $PROD_HOST | cut -d@ -f2)}/health"
           for i in $(seq 1 20); do
-            if curl -sf "$HEALTH_URL" >/dev/null 2>&1; then echo "✅ /health OK"; exit 0; fi
+            if curl -fsS --max-time 10 "$HEALTH_URL" 2>/dev/null \
+              | python3 scripts/validate_health_response.py; then
+              echo "✅ /health OK"
+              exit 0
+            fi
             sleep 5
           done
-          echo "❌ /health スモーク失敗" >&2
+          echo "❌ /health スモーク失敗（JSON status/database=ok を期待）" >&2
           exit 1

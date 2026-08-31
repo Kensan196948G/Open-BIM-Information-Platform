@@ -86,5 +86,11 @@ def generate_presigned_url(
     )
 
 
+def open_file(storage_key: str):
+    """Open an object for authenticated API streaming."""
+    response = get_s3_client().get_object(Bucket=settings.MINIO_BUCKET, Key=storage_key)
+    return response["Body"]
+
+
 def delete_file(storage_key: str) -> None:
     get_s3_client().delete_object(Bucket=settings.MINIO_BUCKET, Key=storage_key)
