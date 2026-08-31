@@ -16,13 +16,24 @@ WEAK_MINIO_CREDENTIALS = {"minioadmin", "minioadmin123", "change_me_in_productio
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        hide_input_in_errors=True,
+    )
 
     # App
     APP_NAME: str = "Open BIM Information Platform"
     APP_VERSION: str = "0.1.0"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
+
+    # MVP 公開デモ用のログイン認証バイパス。True のとき
+    # POST /api/v1/auth/demo-login が資格情報なしでトークンを払い出す。
+    # 既定は False。ENVIRONMENT が "production" の場合は設定値によらず無効。
+    AUTH_BYPASS: bool = False
+    # Required when AUTH_BYPASS=true. Never fall back to an arbitrary user.
+    AUTH_BYPASS_EMAIL: str = ""
 
     # Security
     SECRET_KEY: str = "dev-secret-key-change-in-production"
@@ -44,6 +55,13 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "minioadmin123"
     MINIO_SECURE: bool = False
     MINIO_BUCKET: str = "bim-containers"
+
+    # Legacy objects without an S3 protocol checksum are downloaded to
+    # temporary storage before their DB checksum is trusted. The quota is
+    # shared between workers through reservation files in this directory.
+    DOWNLOAD_TEMP_DIR: str = "/tmp/open-bim-downloads"
+    DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES: int = 512 * 1024 * 1024
+    DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES: int = 1024 * 1024 * 1024
 
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173"
@@ -91,6 +109,22 @@ class Settings(BaseSettings):
         return [
             d.strip().lower() for d in self.OIDC_ALLOWED_DOMAINS.split(",") if d.strip()
         ]
+
+    @model_validator(mode="after")
+    def validate_download_temp_limits(self) -> "Settings":
+        if self.DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES <= 0:
+            raise ValueError("DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES must be positive")
+        if (
+            self.DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES
+            < self.DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES
+        ):
+            raise ValueError(
+                "DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES must be greater than or equal "
+                "to DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES"
+            )
+        if not self.DOWNLOAD_TEMP_DIR.strip():
+            raise ValueError("DOWNLOAD_TEMP_DIR must not be empty")
+        return self
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":

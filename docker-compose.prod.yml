@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Production Compose — no data-tier ports on the host, no source mounts,
 # no --reload. Requires a filled-in .env and TLS certificates in ./certs/.
 #
@@ -108,6 +106,9 @@ services:
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+      DOWNLOAD_TEMP_DIR: /var/tmp/open-bim-downloads
+      DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES: ${DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES:-536870912}
+      DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES: ${DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES:-1073741824}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
       ALLOW_SELF_REGISTRATION: ${ALLOW_SELF_REGISTRATION:?ALLOW_SELF_REGISTRATION must be set in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set in .env}
@@ -131,6 +132,17 @@ services:
     # Increase APP_WORKERS only after confirming Redis availability and
     # running the smoke load test (scripts/smoke_load_test.py).
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${APP_WORKERS:-2}
+    read_only: true
+    tmpfs:
+      - /tmp:size=600m,mode=1777
+      # Must remain larger than DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES. The
+      # application reservation is the normal concurrency gate; tmpfs is the
+      # final host-filesystem protection if a worker fails mid-write.
+      - /var/tmp/open-bim-downloads:size=${DOWNLOAD_TEMP_TMPFS_SIZE:-1100m},mode=0700,uid=10001,gid=10001
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test:
         [
@@ -146,20 +158,30 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NGINX_RUNTIME_UID: ${NGINX_RUNTIME_UID:-1000}
+        NGINX_RUNTIME_GID: ${NGINX_RUNTIME_GID:-1000}
     container_name: bim_frontend
     ports:
-      - "80:80"
-      - "443:443"
+      - "80:8080"
+      - "443:8443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ready || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 volumes:

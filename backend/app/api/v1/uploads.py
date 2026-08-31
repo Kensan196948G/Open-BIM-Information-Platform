@@ -1,9 +1,12 @@
 import re
 import uuid
 from pathlib import PurePosixPath
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 from app.core.deps import DB, CurrentUser
@@ -112,7 +115,7 @@ async def _read_streaming(file: UploadFile) -> bytes:
         total += len(chunk)
         if total > MAX_FILE_SIZE:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=f"File exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
             )
         chunks.append(chunk)
@@ -423,3 +426,82 @@ async def get_download_url(
         ) from exc
 
     return {"download_url": url, "expires_in_seconds": 3600}
+
+
+@router.get("/files/{file_id}/download", response_class=StreamingResponse)
+async def download_file(
+    project_id: str,
+    container_id: str,
+    file_id: str,
+    current_user: CurrentUser,
+    db: DB,
+) -> StreamingResponse:
+    """Stream a file through the authenticated API.
+
+    Public clients must not receive a presigned URL containing an internal or
+    loopback MinIO endpoint.
+    """
+    await _get_container_or_403(project_id, container_id, current_user, db)
+    result = await db.execute(
+        select(ContainerFile).where(
+            ContainerFile.id == file_id,
+            ContainerFile.container_id == container_id,
+        )
+    )
+    file_record = result.scalar_one_or_none()
+    if not file_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
+        )
+
+    try:
+        body = await run_in_threadpool(
+            storage_svc.open_verified_file,
+            file_record.storage_key,
+            file_record.checksum_sha256,
+            file_record.file_size_bytes,
+        )
+    except storage_svc.DownloadTooLargeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="File exceeds the configured download limit",
+        ) from exc
+    except storage_svc.DownloadQuotaExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Temporary download capacity is busy; retry later",
+            headers={"Retry-After": "30"},
+        ) from exc
+    except storage_svc.DownloadStorageFullError as exc:
+        raise HTTPException(
+            status_code=507,
+            detail="Temporary download storage is unavailable",
+        ) from exc
+    except storage_svc.StorageIntegrityError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="File integrity check failed",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Storage service unavailable",
+        ) from exc
+
+    ascii_name = re.sub(r"[^A-Za-z0-9._-]", "_", file_record.original_filename)[:200]
+    encoded_name = quote(file_record.original_filename[:500], safe="")
+
+    def chunks():
+        yield from body.iter_chunks()
+
+    return StreamingResponse(
+        chunks(),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded_name}"
+            ),
+            "Content-Length": str(file_record.file_size_bytes),
+            "X-Content-Type-Options": "nosniff",
+        },
+    )

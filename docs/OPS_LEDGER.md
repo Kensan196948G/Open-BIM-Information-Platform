@@ -41,6 +41,10 @@
 | 日時 | 重大度 | 概要 | 原因 | 対処 | 再発防止 | 担当 |
 |---|---|---|---|---|---|---|
 | 2026-08-18 | High | MVP・本番 URL（open-bim-mvp / open-bim.mirai-dx-platform.com）が HTTP 530 / Error 1033（Cloudflare Tunnel 到達不可） | 各サービス・Tunnel が手動プロセスで起動されており、ホスト再起動等で停止したため | バックエンド（:8030/:8040）・vite preview（:4190/:4191）・cloudflared（MVP/本番）を再起動し、ログイン・API・RBAC 403→200・監査ログまで実ブラウザ相当の curl 検証で復旧確認 | systemd（user）ユニット 6 本（`open-bim-*-{backend,frontend,tunnel}.service`）に移行・enabled（Linger=yes で再起動後も自動起動） | DevOps |
+| 2026-08-31 | High | 外部 `/health` が API ではなく SPA HTML を HTTP 200 で返し、監視が正常と誤判定 | Cloudflare Tunnel が vite preview を origin とする一方、Vite proxy は `/api` のみで `/health` を転送していなかった。監視・deploy smoke も本文を検証していなかった | Vite/nginxで`/health`と`/ready`をbackendへ転送。`/health`はliveness、監視/deployはDB・Redis・Storage・AVを検証する`/ready`契約を必須化 | 公開環境への反映と外部JSON応答の再確認はPR/CI後に実施 | Codex |
+| 2026-08-31 | High | DB-only backup 実行時に7日超の完全バックアップ6件が削除された | retention が backup 種別を区別せず `backup-*` を削除した | DB-only / full の retention を分離。削除済みファイルは workspace 内では復旧不能 | DB-only 実行が full backup に触れない shell check と運用確認を継続 | Codex |
+| 2026-08-31 | Critical | 公開 backend のMinIO `127.0.0.1:9010`が停止し、公開DB 8件中Seed由来7件にObjectがなく、実Upload 1件だけがVolume内でDB/SHA一致 | `seed_mvp.py`がplaceholder Metadataだけを作る設計と、production MinIO Containerにrestart policyがない構成が重複。従来download URLもloopback hostを返した | Credential/Volume一致をHashで確認してMinIOを再起動し、実Upload 1件をread-only検証。Seedを実PDF/IFC Object作成へ修正し、authenticated streaming download・backup integrity gateを追加 | 公開DBの既存Seed 7行修復、Redis/AV接続、完全backup・restore、公開反映後までNO-GO | Codex |
+| 2026-08-31 | High | PostgreSQL 16のBackupをHost既定`pg_dump 17`で生成し、PG16隔離Restoreが`transaction_timeout`で失敗 | `backup.sh`のhost modeがsource serverとdump toolのmajor versionを検証していなかった | Server majorを取得し、同majorの`pg_dump`を自動選択。明示Binary不一致・対応Binary欠如は成果物生成前にFail-fast | Source/Tool/Restore major一致をFull Backup Drillで継続確認 | Codex |
 
 ## 検証実績（2026-08-12 追記）
 
@@ -60,6 +64,9 @@
 | D1 | バックアップ取得（2026-08-18 20:12） | ✅ bim_prod・bim_mvp を pg_dump → 暗号化バンドル作成（36KB・AES-256-CBC・世代保持 7 日） | `backups/backup-20260818-201244.tar.gz.enc` |
 | D1 | 復元演習（2026-08-18） | ✅ 暗号化バンドルを復号し bim_mvp を分離 PostgreSQL 15 コンテナへ復元 → users=6 / containers=11 / projects=3 を確認 | 本ログ（コンテナは検証後破棄） |
 | M3 | Neon 実環境での Migration + Seed 検証（2026-08-18） | ✅ Neon プロジェクト `open-bim-information-platform`（noisy-paper-35107522・us-west-2）を作成し、空の neondb へ `alembic upgrade head`（22 テーブル）→ `seed_mvp.py` 実行 → users=6 / orgs=2 / projects=3 / containers=11 / notifications=3 を確認。さらに一時バックエンドで同 DB にログイン・承認タスク取得が動作（DB 接続の実証） | Neon コンソール + 本ログ |
+| D1 | Local PostgreSQL緊急DB-only backup（2026-08-31 12:44） | ✅ `bim_prod` をPG16 toolchainでdumpしAES-256-CBC暗号化、permission 0600。MinIOは未収録のため完全backupには数えない | `backups/backup-db-only-20260831-124432.tar.gz.enc` |
+| M2 | DB-only復元演習（2026-08-31） | ✅ PostgreSQL 16隔離環境へ復元。projects=3 / containers=12 / audit_logs=34、immutable trigger確認、13秒。MinIO/SHA検証は対象外 | `restore-drill.sh` 実行ログ |
+| M2 | Seed Full Backup復元演習（2026-08-31） | ✅ Seed 2回後もDB/Object各7件。PG16 dump + MinIO暗号化Backupを隔離PG16.14 + MinIOへ復元し、全7 SHA-256・immutable trigger一致、17秒 | `seed_mvp.py` / `backup.sh` / `restore-drill.sh` 実行ログ |
 
 > 備考: SSH デプロイ Secrets（PROD_*）・監視通知先は引き続き人間の提供待ち（Issue #31）。
 > 本番 DB の Neon 移行は、本検証を踏まえ Human Gate 承認後に実施可能。

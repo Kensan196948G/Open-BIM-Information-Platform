@@ -8,28 +8,28 @@
   },
   "goal": "ISO 19650準拠のBIM情報基盤WebシステムをRelease Ready状態へ到達させる。全テスト通過・CI成功・blocker=0",
   "goal_type": "production-release",
-  "phase": "Release",
+  "phase": "Stabilize",
   "trust_level": 1,
   "kpi": {
     "success_rate_target": 0.9,
     "ci_success_rate": 1,
     "ci_all_jobs_pass": true,
-    "ci_jobs": 8,
-    "ci_last_run": "27690372666",
-    "ci_consecutive_success": 11,
+    "ci_jobs": 9,
+    "ci_last_run": "33369771843",
+    "ci_consecutive_success": 18,
     "test_pass_rate": 1,
-    "test_count": 292,
-    "backend_test_count": 245,
-    "frontend_test_count": 26,
-    "e2e_test_count": 21,
+    "test_count": 381,
+    "backend_test_count": 338,
+    "frontend_test_count": 28,
+    "e2e_test_count": 15,
     "lint_errors": 0,
     "npm_vulnerabilities_high": 0,
     "security_critical": 0,
-    "blocker_count": 0,
-    "open_issues": 0,
-    "stable_achieved": true,
+    "blocker_count": 3,
+    "open_issues": 2,
+    "stable_achieved": false,
     "stable_n": 5,
-    "deploy_ready": true
+    "deploy_ready": false
   },
   "execution": {
     "max_duration_minutes": 300,
@@ -49,10 +49,10 @@
   },
   "tech_stack": {
     "backend": "FastAPI (Python 3.11)",
-    "frontend": "React 18 + TypeScript + Vite",
-    "database": "PostgreSQL 15",
+    "frontend": "React 19 + TypeScript + Vite",
+    "database": "公開host: Local PostgreSQL 16 / Compose: PostgreSQL 15.10 / restore drill: PostgreSQL 16.14",
     "orm": "SQLAlchemy 2.x + Alembic",
-    "auth": "JWT（OIDC は未実装・準備中）",
+    "auth": "JWT + OIDC PoC（本番IdP未接続）",
     "storage": "MinIO (S3-compatible)",
     "cache": "Redis",
     "infra": "Docker Compose"
@@ -69,9 +69,15 @@
     "#20: RequirementsPage 実API接続 (PR #22 — merged 2026-06-17)",
     "#15: Requirements Documents API (PR #17 — merged 2026-06-17)",
     "containers-coverage: 6 new tests added (full CDE lifecycle, auth guards, pagination) — PR #14 (2026-06-14)",
-    "#naming-rules-platform-admin: 3 platform admin bypass tests for GET/PUT/DELETE naming-rules API"
+    "#naming-rules-platform-admin: 3 platform admin bypass tests for GET/PUT/DELETE naming-rules API",
+    "#49: frontend production/demo nginx runtime非root化、非特権port、capability全drop、read-only rootfs、TLS UID preflight",
+    "#50: S3 SHA-256直接stream、legacy worker共有quota、browser別UX、500MiB並列検証、backend image hardening"
   ],
-  "blocked_issues": [],
+  "blocked_issues": [
+    "P0 (#47): 公開systemd backendのMinIO 127.0.0.1:9010が停止し、DB file metadataとobject storageが不整合",
+    "P0: 完全バックアップなし（2026-08-31のDB-only backupは復元済みだがMinIO未収録）",
+    "P1: 公開health/readiness proxy・authenticated downloadは未デプロイ（Human Gate待ち）"
+  ],
   "production_gate": {
     "status": "live_via_tunnel",
     "note": "2026-08-15 本番ドメイン open-bim.mirai-dx-platform.com の DNS(Tunnel CNAME) と Tunnel 設定を Cloudflare に登録。2026-08-18 に MVP・本番の全サービスを systemd(user) ユニットで常駐化し復旧（Linger=yes）。本番は production モード・架空デモデータのみ。",
@@ -90,7 +96,7 @@
     "codex_adversarial": "timeout_fallback_to_subagent",
     "internal_review": "completed",
     "adversarial_review": "completed (subagent)",
-    "findings_fixed": 13,
+    "findings_fixed": 17,
     "critical_high_open": 0
   },
   "quality": {
@@ -104,21 +110,23 @@
     "ci_consecutive_green": 3
   },
   "release_readiness": {
-    "status": "phase0_hardening_in_progress",
-    "cto_decision": "Release Ready（技術的PoC）",
-    "cto_decision_at": "2026-05-31",
+    "status": "no_go_storage_recovery_required",
+    "cto_decision": "NO-GO（MinIO・完全backup・公開readiness未達）",
+    "cto_decision_at": "2026-08-31",
     "ci_all_green": true,
-    "ci_jobs": 7,
-    "ci_last_run": "27687383766",
-    "stable_achieved": true,
+    "ci_jobs": 9,
+    "ci_last_run": "33369771843",
+    "stable_achieved": false,
     "stable_consecutive_green": 5,
     "docs_complete": true,
     "e2e_live_backend": true,
     "performance_baseline": true,
     "remaining_for_production": [
-      "Human sign-off (mandatory for production deploy — CTO cannot self-approve)",
-      "Phase 0: production起動ガード / Compose内部network化 / TLS / 監査ログ書込+トリガー / PostgreSQL試験 / バックアップ自動化+復元演習 / ライセンス / 主張是正",
-      "Phase 1: SSO/MFA / 協力会社 / 通知 / 検索 / 監視 / 限定パイロット"
+      "MinIO service復旧と既存DB metadata 8件の業務扱い・object integrity確認（Human Gate）",
+      "MinIOを含む完全backupと隔離restore drill（実装・架空データ検証済み、運用承認待ち）",
+      "health/readiness/download修正の公開反映後health check",
+      "Redis/ClamAVのsystemd backend接続と監視通知先の確定",
+      "Human sign-off (mandatory for production deploy)"
     ]
   },
   "deploy": {
@@ -131,7 +139,7 @@
     "runbook": "docs/OPERATIONS.md",
     "executor": "human (manual deploy required; CTO does not auto-deploy)",
     "signoff": "pending",
-    "phase0_gate": "一部完了（AV/バックアップ/SSO PoC実装済み・本番IdP接続と復元実績は未）",
+    "phase0_gate": "未達（Local PostgreSQL DB-only復元は成功。MinIO停止・完全backupなし・AV実環境未確認）",
     "neon": {
       "project_id": "noisy-paper-35107522",
       "name": "open-bim-information-platform",
@@ -140,16 +148,21 @@
       "note": "空の neondb へ alembic upgrade head（22テーブル）→ seed_mvp.py（users=6/orgs=2/projects=3/containers=11）を実証。アプリの一時起動でログイン・タスク取得も確認。本番 DB の Neon 移行は Human Gate 承認後に実施。"
     },
     "last_backup": {
-      "at": "2026-08-18T20:12+09:00",
-      "file": "backups/backup-20260818-201244.tar.gz.enc",
-      "restore_drill": "2026-08-18 users=6/containers=11/projects=3 復元確認"
+      "at": "2026-08-31T12:44+09:00",
+      "file": "backups/backup-db-only-20260831-124432.tar.gz.enc",
+      "restore_drill": "PostgreSQL 16: projects=3/containers=12/audit_logs=34、immutable trigger確認、13秒。MinIO未収録のため完全backupではない"
     }
   },
   "learning": {
     "failure_patterns": [
       "bcrypt 5.x + Python 3.12: use bcrypt directly, not passlib",
       "container_files + container_revisions: circular FK requires no-FK on one side",
-      "FastAPI HTTPBearer: get_current_user raises 401 credentials_exception — POST /api/v1/workflows without auth returns 401, not 403. Assert 401 in E2E tests."
+      "FastAPI HTTPBearer: get_current_user raises 401 credentials_exception — POST /api/v1/workflows without auth returns 401, not 403. Assert 401 in E2E tests.",
+      "HTTP 200だけのhealth probeはSPA fallback HTMLを正常扱いする。livenessと、DB/Redis/Storage/AVを検証するrelease readinessを分離し、JSON契約まで検証する。",
+      "DB-only backupのretentionをfull backupと共用すると、完全復旧点を失う。backup種別ごとに世代管理を分離する。",
+      "PostgreSQL backupはserver majorとpg_dump majorが不一致だと新しいSET文で復元不能になり得る。Backup前にmajorを照合し、同major toolchainを選択する。",
+      "systemd host processとDocker dependencyを混在させる場合、loopback port・Credential・公開URLの到達性を個別に検証する。",
+      "固定長S3 streamはSDK checksum検証がEOF後のempty readで発火し得る。最終chunkをlook-aheadで保留しないと、破損検知前にContent-Length全量をclientへ渡し得る。"
     ],
     "success_patterns": [
       "SELECT FOR UPDATE for concurrent approval race condition prevention",
@@ -157,7 +170,13 @@
       "Look-ahead algorithm for optional segment skipping in naming validator",
       "NamingRule dataclass designed for DI — DB model stores JSON, service converts to dataclass",
       "react-refresh/only-export-components: move non-component exports to lib/fmt.ts",
-      "Playwright E2E mock-mode: use real authenticate() helper (live backend always up in CI) — mock tokens trigger api.ts 401 interceptor and redirect to /login"
+      "Playwright E2E mock-mode: use real authenticate() helper (live backend always up in CI) — mock tokens trigger api.ts 401 interceptor and redirect to /login",
+      "Local PostgreSQL backup/restoreはsource DBとpg_dump/restore imageのmajor versionを合わせ、--no-owner --no-acl と ON_ERROR_STOPを使う。",
+      "mode 0600のTLS秘密鍵を非root containerから読む場合、権限を緩和せずnumeric runtime UIDをhost owner UIDへ一致させ、deploy preflightでfail-closedにする。",
+      "S3 protocol SHA-256をDB checksumと開始前照合し、最終chunkを検証後に渡せば、新規objectの全量pre-bufferをなくせる。protocol checksumのないlegacy objectはworker間共有quota付き事前検証へfallbackする。",
+      "Python backend imageはdigest固定multi-stage、production dependencyのみ、非root/read-only/capability全dropとし、runtimeからpip/build toolを除去するとTrivy High/Criticalを27件から0件へ削減できる。",
+      "デモSeedはDB変更前にMinIO到達性を確認し、決定論的PDF/IFCをprotocol checksum付きで作る。Seed 2回後もDB/Object/SHAを一致させる。",
+      "Host PostgreSQL backupはserver majorを検出して同major pg_dumpを選択し、PG16.14+MinIO restore drill全SHA成功を確認する。"
     ],
     "usage_history": {
       "skills": {

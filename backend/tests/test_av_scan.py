@@ -7,7 +7,7 @@ import pytest
 from httpx import AsyncClient
 
 from app.core.config import settings
-from app.services.av_scan import scan_bytes
+from app.services.av_scan import ping_clamd, scan_bytes
 
 EICAR = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 
@@ -57,6 +57,16 @@ async def start_clamd():
 
     for server in servers:
         server.close()
+
+
+@pytest.mark.no_db
+@pytest.mark.asyncio
+async def test_ping_clamd(start_clamd, monkeypatch):
+    port = await start_clamd()
+    monkeypatch.setattr(settings, "CLAMD_HOST", "127.0.0.1")
+    monkeypatch.setattr(settings, "CLAMD_PORT", port)
+
+    await ping_clamd()
 
 
 @pytest.mark.no_db

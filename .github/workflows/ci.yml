@@ -24,11 +24,20 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install ruff mypy
-      - run: ruff check app tests
-      - run: ruff format --check app tests
+      - run: ruff check app tests ../scripts/seed_mvp.py
+      - run: ruff format --check app tests ../scripts/seed_mvp.py
       - name: mypy
         # Production code only; test files are covered by ruff + pytest.
         run: mypy app
+      - name: Build hardened backend image
+        working-directory: .
+        run: docker build -t open-bim-backend:ci backend
+      - name: Verify backend runtime metadata
+        working-directory: .
+        run: |
+          test "$(docker image inspect open-bim-backend:ci --format '{{.Config.User}}')" = "10001:10001"
+          docker run --rm open-bim-backend:ci python -c "import app.main"
+          docker run --rm open-bim-backend:ci sh -c '! command -v pip'
 
   backend-test:
     name: Backend Tests
@@ -169,6 +178,19 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+      - name: Build non-root frontend images
+        working-directory: .
+        run: |
+          docker build -t open-bim-frontend:ci frontend
+          docker build -f frontend/Dockerfile.demo -t open-bim-frontend-demo:ci frontend
+      - name: Verify frontend runtime metadata
+        run: |
+          test "$(docker image inspect open-bim-frontend:ci --format '{{.Config.User}}')" = "1000:1000"
+          test "$(docker image inspect open-bim-frontend-demo:ci --format '{{.Config.User}}')" = "101:101"
+          docker image inspect open-bim-frontend:ci --format '{{json .Config.ExposedPorts}}' \
+            | jq -e 'has("8080/tcp") and has("8443/tcp")'
+          docker image inspect open-bim-frontend-demo:ci --format '{{json .Config.ExposedPorts}}' \
+            | jq -e 'has("3000/tcp")'
 
   e2e:
     name: E2E (Playwright + live backend)
@@ -255,7 +277,7 @@ jobs:
         working-directory: frontend
         env:
           CI: "true"
-          BASE_URL: http://localhost:4173
+          E2E_BASE_URL: http://localhost:4173
           VITE_API_BASE_URL: http://localhost:8000
         run: npx playwright test
       - name: Upload Playwright report

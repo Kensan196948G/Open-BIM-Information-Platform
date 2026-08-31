@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 // Helper: authenticate and store session in browser
-async function authenticate(page: any, baseURL: string) {
+async function authenticate(page: any) {
   const apiBase = process.env.VITE_API_BASE_URL || "http://localhost:8000";
 
   // Login via API to get token
@@ -37,7 +37,7 @@ test.describe("Authenticated navigation", () => {
   );
 
   test("dashboard shows stat cards", async ({ page }) => {
-    await authenticate(page, process.env.BASE_URL || "http://localhost:5173");
+    await authenticate(page);
     // h1 heading on the dashboard page
     await expect(
       page.getByRole("heading", { name: "ダッシュボード" }),
@@ -48,7 +48,7 @@ test.describe("Authenticated navigation", () => {
   });
 
   test("sidebar navigation works", async ({ page }) => {
-    await authenticate(page, process.env.BASE_URL || "http://localhost:5173");
+    await authenticate(page);
     // Use the sidebar link role to avoid matching the page heading
     await page.getByRole("link", { name: "プロジェクト" }).click();
     await expect(page).toHaveURL(/\/projects/);
@@ -59,7 +59,7 @@ test.describe("Authenticated navigation", () => {
   });
 
   test("logout clears session and redirects", async ({ page }) => {
-    await authenticate(page, process.env.BASE_URL || "http://localhost:5173");
+    await authenticate(page);
     // Redesigned Layout uses icon-only button with title="ログアウト"
     await page.locator('[title="ログアウト"]').click();
     await expect(page).toHaveURL(/\/login/);
@@ -67,6 +67,21 @@ test.describe("Authenticated navigation", () => {
 });
 
 test.describe("Static routing", () => {
+  test("/health proxies the backend health contract", async ({ request }) => {
+    test.skip(
+      !process.env.VITE_API_BASE_URL,
+      "Requires running backend (set VITE_API_BASE_URL)",
+    );
+
+    const response = await request.get("/health");
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("application/json");
+    expect(await response.json()).toMatchObject({
+      status: "ok",
+      database: "ok",
+    });
+  });
+
   test("/ redirects to /dashboard or /login", async ({ page }) => {
     await page.goto("/");
     // Wait for client-side redirect to settle (unauthenticated → /login)

@@ -14,7 +14,9 @@ import {
 import { api } from "@/lib/api";
 import {
   deleteFile,
-  getDownloadUrl,
+  downloadFile,
+  downloadFileToWritable,
+  DownloadHttpError,
   listContainerRevisions,
   listFiles,
 } from "@/api/containers";
@@ -31,6 +33,12 @@ import type {
   InformationContainer,
   PaginatedResponse,
 } from "@/types";
+
+const MAX_BLOB_DOWNLOAD_BYTES = 100 * 1024 * 1024;
+
+interface SaveFilePickerWindow extends Window {
+  showSaveFilePicker?: (options: { suggestedName: string }) => Promise<FileSystemFileHandle>;
+}
 
 const transitions: Partial<
   Record<ContainerState, Array<{ action: string; to: ContainerState; label: string; danger?: boolean }>>
@@ -51,6 +59,7 @@ function namingStatus(container: InformationContainer): "pass" | "warn" | "fail"
 export default function ContainerDetailPage() {
   const { projectId, containerId } = useParams<{ projectId: string; containerId: string }>();
   const [tab, setTab] = useState<"overview" | "files" | "revisions" | "history">("overview");
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["containers", projectId],
@@ -88,9 +97,70 @@ export default function ContainerDetailPage() {
     },
   });
   const downloadMutation = useMutation({
-    mutationFn: (fileId: string) => getDownloadUrl(projectId!, containerId!, fileId),
-    onSuccess: (url) => window.open(url, "_blank", "noopener"),
+    mutationFn: async ({
+      file,
+      handle,
+    }: {
+      file: (typeof files)[number];
+      handle?: FileSystemFileHandle;
+    }) => {
+      if (handle) {
+        const writable = await handle.createWritable();
+        await downloadFileToWritable(projectId!, containerId!, file.id, writable);
+        return { blob: null, filename: file.original_filename };
+      }
+      return {
+        blob: await downloadFile(projectId!, containerId!, file.id),
+        filename: file.original_filename,
+      };
+    },
+    onMutate: () => setDownloadError(null),
+    onSuccess: ({ blob, filename }) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    },
+    onError: (error) => {
+      if (error instanceof DownloadHttpError && error.status === 429) {
+        setDownloadError("同時ダウンロードの上限に達しました。30秒後に再試行してください。");
+        return;
+      }
+      if (error instanceof DownloadHttpError && error.status === 507) {
+        setDownloadError("一時保存領域を使用できません。管理者へ連絡してください。");
+        return;
+      }
+      setDownloadError("ファイルを取得できませんでした。ストレージの状態を確認してください。");
+    },
   });
+
+  const startDownload = async (file: (typeof files)[number]) => {
+    setDownloadError(null);
+    const picker = (window as SaveFilePickerWindow).showSaveFilePicker;
+    if (picker) {
+      try {
+        const handle = await picker({ suggestedName: file.original_filename });
+        downloadMutation.mutate({ file, handle });
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setDownloadError("保存先を開けませんでした。");
+        }
+      }
+      return;
+    }
+    if (file.file_size_bytes > MAX_BLOB_DOWNLOAD_BYTES) {
+      setDownloadError(
+        "このブラウザーでは100 MBを超えるファイルを安全に保存できません。Chromium系ブラウザーを使用してください。",
+      );
+      return;
+    }
+    downloadMutation.mutate({ file });
+  };
   const { data: revisions = [] } = useQuery({
     queryKey: ["revisions", projectId, containerId],
     queryFn: () => listContainerRevisions(projectId!, containerId!),
@@ -210,6 +280,11 @@ export default function ContainerDetailPage() {
               )}
               {tab === "files" && (
                 <div>
+                  {downloadError && (
+                    <div className="mb-3 text-sm" role="alert" style={{ color: "var(--danger, #dc2626)" }}>
+                      {downloadError}
+                    </div>
+                  )}
                   {files.length === 0 ? (
                     <div className="py-8 text-center t-sec">
                       ファイルがありません。WIP 状態でアップロードできます。
@@ -233,7 +308,7 @@ export default function ContainerDetailPage() {
                           <button
                             className="app-btn app-btn-ghost app-btn-sm"
                             disabled={downloadMutation.isPending}
-                            onClick={() => downloadMutation.mutate(file.id)}
+                            onClick={() => void startDownload(file)}
                             aria-label={`${file.original_filename} をダウンロード`}
                           >
                             <Download className="h-3.5 w-3.5" />

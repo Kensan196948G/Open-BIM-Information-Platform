@@ -55,3 +55,42 @@
 
 - ステージング品質ゲート: **GO**
 - 本番デプロイ: **未実施**（本番環境・ドメイン・Secretsが未確定のため）
+
+## 2026-08-31 frontend非root追試
+
+- `nginxinc/nginx-unprivileged:1.30.4-alpine`をdigest固定し、production runtime UIDを
+  mode 0600 TLS秘密鍵のowner UIDへ一致させた隔離containerで検証
+- container 8080/8443、host 80/443 mappingをComposeで解決確認
+- UID/GID 1000、全Linux capability 0、`NoNewPrivs=1`、read-only rootfsを実測
+- HTTP redirect、HTTPS SPA、security headers、API・health・readiness proxyが成功
+- 500MiB upload/download proxyが各HTTP 200。64MiB `/tmp` tmpfs使用量は4KiBで、
+  request/response bufferingによる一時disk使用なし
+- production/demo imageともTrivy High/Critical vulnerability 0、Dockerfile misconfiguration 0
+- 本番systemd/Cloudflare環境への反映はPR #48のHuman Gate後に実施
+
+## 2026-08-31 verified download streaming追試
+
+- 固定MinIO releaseへ`ChecksumSHA256`付きobjectをPUTし、`ChecksumMode=ENABLED`のGETで
+  同一SHA-256 headerとbodyを取得できることを実測
+- protocol checksum付きobjectは一時reservationなしでstreamし、legacy objectだけが
+  SHA-256事前検証とworker共有quotaを使用するunit/API testを追加
+- legacy quotaはper-request超過413、全worker予約超過429 + `Retry-After: 30`、
+  filesystem不足507へfail-closed
+- File System Access APIのstream開始前失敗時にもdestinationをabortするfrontend testを追加
+- 500MiB・並列・切断の実MinIO検証結果はPR #48のTest Resultへ記録する
+- backend imageをPython 3.11.13 digest固定multi-stageへ変更し、runtime UID 10001、
+  capability 0、`NoNewPrivs=1`、read-only rootfs、runtime pip/test dependencyなしを実測
+- backend image Trivy High/Criticalは変更前OS 24/Python 3から変更後0、
+  Dockerfile misconfiguration 0へ改善
+
+## 2026-08-31 Seed / Full Backup整合追試
+
+- 旧`seed_mvp.py`がDBにplaceholder checksum 7件だけを作り、MinIO payloadを作らないRoot Causeを特定
+- Seedを実PDF 6件・最小IFC 1件の決定論的Objectへ変更し、MinIO未到達時はDB変更前に失敗
+- 使い捨てPostgreSQL 16.14 + 固定MinIOでMigration後にSeedを2回実行し、DB 7件 / Object 7件、
+  Size・SHA-256・S3 protocol checksum全件一致を確認
+- Hostの既定`pg_dump 17`とsource PostgreSQL 16の不一致を検知し、同major `pg_dump 16`を
+  自動選択するよう`backup.sh`を修正
+- 7 Objectを含む暗号化Full Backupを作成し、隔離PostgreSQL 16.14 + MinIOへ復元。
+  projects=3 / containers=11 / files=7 / immutable trigger / 全7 SHA-256一致、17秒で成功
+- 公開DBの既存placeholder 7行は変更していない。実環境修復・Full BackupはHuman Gateを維持

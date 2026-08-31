@@ -8,6 +8,14 @@
 # 環境変数（.env または systemd EnvironmentFile）
 BACKUP_DIR=/mnt/backup/bim
 BACKUP_ENCRYPTION_KEY=<openssl rand -hex 32 で生成した鍵>
+BACKUP_MAINTENANCE_CONFIRMED=false  # full backup実行時だけ、書込み停止確認後にtrue
+POSTGRES_BACKUP_MODE=host  # Local PostgreSQL。Compose内DBは compose
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+# 省略時はserver majorを検出し、必要なら同majorの/usr/lib/postgresql/<major>/bin/pg_dumpを選択
+# PG_DUMP_BIN=/usr/lib/postgresql/16/bin/pg_dump
+PSQL_BIN=/usr/lib/postgresql/16/bin/psql
+MINIO_BACKUP_MODE=host     # host上のMinIO。Compose内MinIOは compose
 ```
 
 ```bash
@@ -45,6 +53,35 @@ WantedBy=timers.target
 | 設定 | .env・Compose・nginx.conf を同梱 |
 | 世代 | 直近7日を保持（`RETENTION_DAYS`で変更） |
 
+生成物と一時ファイルは `umask 077` で owner-only とする。`host` mode は
+systemd で動く backend と同じ Local PostgreSQL / MinIO を対象にし、`compose` mode は
+Compose network 内の service を対象にする。DB名・接続先・modeを実行前に必ず確認すること。
+`backup.sh`はsource serverと`pg_dump`のmajor versionを照合する。既定Binaryが異なる場合は
+`/usr/lib/postgresql/<server-major>/bin/pg_dump`を自動選択し、対応Binaryがなければ暗号化成果物を
+作る前に失敗する。`PG_DUMP_BIN`を明示した場合の不一致もFail-fastする。復元用PostgreSQL imageも
+source DBと同じmajor versionを使う。
+EnvironmentFile の `BACKUP_DIR` を一時的に変更せず出力先だけ切り替える場合は、
+`BACKUP_DIR_OVERRIDE=/writable/path` を指定できる。
+
+MinIO 障害時にDBの復旧点だけを緊急確保する場合は、明示的に
+`MINIO_BACKUP_MODE=skip ALLOW_DB_ONLY_BACKUP=true` を指定する。生成物は
+`backup-db-only-*` となり、MinIOを含まないため日次完全バックアップやRPO達成には数えない。
+DB-only と完全バックアップの retention は分離され、DB-only 実行は完全バックアップを
+削除しない。
+
+完全バックアップでは暗号化前に、DBの全`container_files.storage_key`がmirror内に存在し、
+DBレコード数とMinIO object数が一致することを検証する。不一致時はexit code 1で終了し、
+完全バックアップ成果物を生成しない。DB-onlyはこの検査を意図的に省略するため、障害復旧時の
+ファイル復元には使用できない。
+
+`scripts/seed_mvp.py`も同じ整合契約に従い、DB変更前にMinIO到達性を確認して実PDF/IFC Objectを
+作成する。MetadataだけのSeedは禁止し、再実行後もDBの全`storage_key`と`demo/` Objectを一致させる。
+
+DB dumpとMinIO mirrorを同一の復元時点として扱うには、backendへの書込みを停止した
+maintenance window内で連続実行する。書込み停止と対象DB/MinIOの確認後に限り、実行時環境へ
+`BACKUP_MAINTENANCE_CONFIRMED=true`を渡す。未確認のfull backupはscriptが拒否する。
+将来object versioningとDB snapshotで世代を固定するまでは、通常稼働中にこのflagを恒常設定しない。
+
 バックアップファイルは**アプリとは別の障害ドメイン**（NAS・別拠点・オブジェクトストレージ）へ
 コピーしてください。
 
@@ -59,7 +96,7 @@ BACKUP_ENCRYPTION_KEY='...' ./scripts/restore-drill.sh ./backups/backup-20260805
 - PostgreSQLの全テーブル復元（件数表示）
 - 監査ログ immutable トリガーの再適用確認
 - MinIOオブジェクトの復元
-- サンプル5件のSHA-256一致検証
+- 全ファイルのSHA-256一致検証
 - 所要時間の記録（RTO参考値）
 
 ## 目標値（初期）

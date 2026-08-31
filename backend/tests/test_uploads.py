@@ -336,6 +336,116 @@ async def test_upload_then_get_download_url(client: AsyncClient, mock_s3):
 
 @needs_moto
 @pytest.mark.asyncio
+async def test_upload_then_download_through_authenticated_api(
+    client: AsyncClient, mock_s3
+):
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "download@ex.com", "download")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+    content = b"BIM download through API"
+
+    upload_res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("drawing.pdf", content, "application/pdf")},
+    )
+    file_id = upload_res.json()["id"]
+
+    download_res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files/{file_id}/download",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert download_res.status_code == 200
+    assert download_res.content == content
+    assert download_res.headers["content-type"] == "application/octet-stream"
+    assert "attachment" in download_res.headers["content-disposition"]
+    assert download_res.headers["x-content-type-options"] == "nosniff"
+
+
+async def test_download_requires_auth(client: AsyncClient):
+    res = await client.get(
+        f"/api/v1/projects/fake/containers/fake/files/{uuid.uuid4()}/download"
+    )
+    assert res.status_code == 401
+
+
+@needs_moto
+@pytest.mark.asyncio
+async def test_download_rejects_checksum_mismatch(client: AsyncClient, mock_s3):
+    from app.services import storage as storage_svc
+
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "corrupt@ex.com", "corrupt")
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+    upload_res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("drawing.pdf", b"original", "application/pdf")},
+    )
+    uploaded = upload_res.json()
+    storage_svc.get_s3_client().put_object(
+        Bucket="bim-containers", Key=uploaded["storage_key"], Body=b"corrupt"
+    )
+
+    response = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files/{uploaded['id']}/download",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"] == "File integrity check failed"
+
+
+@needs_moto
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("storage_error", "expected_status", "expected_retry_after"),
+    [
+        ("DownloadTooLargeError", 413, None),
+        ("DownloadQuotaExceededError", 429, "30"),
+        ("DownloadStorageFullError", 507, None),
+    ],
+)
+async def test_download_maps_temporary_storage_failures(
+    client: AsyncClient,
+    mock_s3,
+    monkeypatch,
+    storage_error: str,
+    expected_status: int,
+    expected_retry_after: str | None,
+):
+    from app.services import storage as storage_svc
+
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(
+        client, f"{storage_error}@ex.com", storage_error
+    )
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+    upload_res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("drawing.pdf", b"content", "application/pdf")},
+    )
+    file_id = upload_res.json()["id"]
+    error_type = getattr(storage_svc, storage_error)
+
+    def fail_download(*_args):
+        raise error_type
+
+    monkeypatch.setattr(storage_svc, "open_verified_file", fail_download)
+    response = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files/{file_id}/download",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == expected_status
+    assert response.headers.get("retry-after") == expected_retry_after
+
+
+@needs_moto
+@pytest.mark.asyncio
 async def test_list_files_returns_uploads(client: AsyncClient, mock_s3):
     """GET /files returns uploaded files with metadata (newest first)."""
     org_id, proj_id = await _setup_org_project()

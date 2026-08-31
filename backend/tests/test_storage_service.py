@@ -1,7 +1,10 @@
 """Unit tests for app/services/storage.py using moto S3 mock."""
 
+import base64
 import hashlib
+import io
 import re
+from unittest.mock import patch
 
 import pytest
 
@@ -90,6 +93,25 @@ def test_get_s3_client_singleton(monkeypatch):
 
 
 @needs_moto
+def test_check_storage_succeeds_when_bucket_exists(s3_env):
+    """check_storage verifies access to the configured bucket."""
+    from app.services.storage import check_storage
+
+    check_storage()
+
+
+@needs_moto
+def test_check_storage_raises_when_bucket_is_missing(s3_env_no_bucket):
+    """check_storage surfaces a missing configured bucket."""
+    from botocore.exceptions import ClientError
+
+    from app.services.storage import check_storage
+
+    with pytest.raises(ClientError):
+        check_storage()
+
+
+@needs_moto
 def test_ensure_bucket_creates_when_missing(s3_env_no_bucket, monkeypatch):
     """ensure_bucket_exists creates the bucket when it does not exist."""
     from app.core.config import settings
@@ -163,16 +185,182 @@ def test_upload_file_stores_sha256_metadata(s3_env):
     from app.services.storage import upload_file
 
     data = b"BIM specification data"
-    key, sha256, _ = upload_file(
-        data=data,
-        content_type="application/pdf",
-        project_id="proj-003",
-        container_id="cont-def",
-        original_filename="spec.pdf",
-    )
+    with patch.object(s3_env, "put_object", wraps=s3_env.put_object) as put_object:
+        key, sha256, _ = upload_file(
+            data=data,
+            content_type="application/pdf",
+            project_id="proj-003",
+            container_id="cont-def",
+            original_filename="spec.pdf",
+        )
 
     head = s3_env.head_object(Bucket=settings.MINIO_BUCKET, Key=key)
     assert head["Metadata"]["sha256"] == sha256
+    assert put_object.call_args.kwargs["ChecksumSHA256"] == base64.b64encode(
+        bytes.fromhex(sha256)
+    ).decode("ascii")
+
+
+def test_open_verified_file_streams_protocol_checked_object_without_quota(
+    tmp_path, monkeypatch
+):
+    from app import services
+    from app.core.config import settings
+    from app.services.storage import open_verified_file
+
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_DIR", str(tmp_path))
+    data = b"protocol checked download"
+    sha256 = hashlib.sha256(data).hexdigest()
+    monkeypatch.setattr(
+        services.storage,
+        "open_file",
+        lambda _key: {
+            "Body": io.BytesIO(data),
+            "ContentLength": len(data),
+            "ChecksumSHA256": base64.b64encode(bytes.fromhex(sha256)).decode("ascii"),
+            "Metadata": {"sha256": sha256},
+        },
+    )
+
+    download = open_verified_file("project/container/model.ifc", sha256, len(data))
+
+    assert download.preverified is False
+    assert download.reservation is None
+    assert b"".join(download.iter_chunks()) == data
+    assert not list(tmp_path.glob(".reservation-*.json"))
+
+
+@needs_moto
+def test_open_verified_file_preverifies_legacy_object_and_releases_quota(
+    s3_env, tmp_path, monkeypatch
+):
+    from app.core.config import settings
+    from app.services.storage import open_verified_file
+
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_DIR", str(tmp_path))
+    data = b"legacy object without protocol checksum"
+    sha256 = hashlib.sha256(data).hexdigest()
+    key = "project/container/legacy.ifc"
+    s3_env.put_object(
+        Bucket=settings.MINIO_BUCKET,
+        Key=key,
+        Body=data,
+        Metadata={"sha256": sha256},
+    )
+
+    download = open_verified_file(key, sha256, len(data))
+
+    assert download.preverified is True
+    assert len(list(tmp_path.glob(".reservation-*.json"))) == 1
+    assert b"".join(download.iter_chunks()) == data
+    assert not list(tmp_path.glob(".reservation-*.json"))
+
+
+def test_temporary_storage_quota_is_shared_and_released(tmp_path, monkeypatch):
+    from app.core.config import settings
+    from app.services.storage import (
+        DownloadQuotaExceededError,
+        reserve_temporary_storage,
+    )
+
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_DIR", str(tmp_path))
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES", 10)
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES", 15)
+    first = reserve_temporary_storage(10)
+    try:
+        with pytest.raises(DownloadQuotaExceededError):
+            reserve_temporary_storage(6)
+    finally:
+        first.release()
+
+    second = reserve_temporary_storage(6)
+    second.release()
+    assert not list(tmp_path.glob(".reservation-*.json"))
+
+
+def test_temporary_storage_quota_rejects_oversized_request(tmp_path, monkeypatch):
+    from app.core.config import settings
+    from app.services.storage import DownloadTooLargeError, reserve_temporary_storage
+
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_DIR", str(tmp_path))
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES", 5)
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES", 10)
+
+    with pytest.raises(DownloadTooLargeError):
+        reserve_temporary_storage(6)
+
+
+def test_temporary_storage_quota_rejects_insufficient_filesystem(tmp_path, monkeypatch):
+    from app import services
+    from app.core.config import settings
+    from app.services.storage import DownloadStorageFullError, reserve_temporary_storage
+
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_DIR", str(tmp_path))
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES", 10)
+    monkeypatch.setattr(settings, "DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES", 10)
+    monkeypatch.setattr(
+        services.storage.shutil,
+        "disk_usage",
+        lambda _path: services.storage.shutil._ntuple_diskusage(100, 100, 0),
+    )
+
+    with pytest.raises(DownloadStorageFullError):
+        reserve_temporary_storage(1)
+
+
+def test_open_verified_file_rejects_protocol_checksum_mismatch(monkeypatch):
+    from app import services
+    from app.services.storage import StorageIntegrityError, open_verified_file
+
+    data = b"stored bytes"
+    stored_sha256 = hashlib.sha256(data).hexdigest()
+    expected_sha256 = hashlib.sha256(b"expected bytes").hexdigest()
+    monkeypatch.setattr(
+        services.storage,
+        "open_file",
+        lambda _key: {
+            "Body": io.BytesIO(data),
+            "ContentLength": len(data),
+            "ChecksumSHA256": base64.b64encode(bytes.fromhex(stored_sha256)).decode(
+                "ascii"
+            ),
+            "Metadata": {"sha256": stored_sha256},
+        },
+    )
+
+    with pytest.raises(StorageIntegrityError, match="checksum mismatch"):
+        open_verified_file("project/container/mismatch.ifc", expected_sha256, len(data))
+
+
+def test_protocol_stream_withholds_final_chunk_until_body_checksum_matches(
+    monkeypatch,
+):
+    from app import services
+    from app.services.storage import StorageIntegrityError, open_verified_file
+
+    expected = b"expected"
+    corrupt = b"corrupt!"
+    expected_sha256 = hashlib.sha256(expected).hexdigest()
+    monkeypatch.setattr(
+        services.storage,
+        "open_file",
+        lambda _key: {
+            "Body": io.BytesIO(corrupt),
+            "ContentLength": len(corrupt),
+            "ChecksumSHA256": base64.b64encode(bytes.fromhex(expected_sha256)).decode(
+                "ascii"
+            ),
+            "Metadata": {"sha256": expected_sha256},
+        },
+    )
+
+    download = open_verified_file(
+        "project/container/corrupt.ifc", expected_sha256, len(corrupt)
+    )
+    iterator = download.iter_chunks()
+
+    with pytest.raises(StorageIntegrityError, match="checksum mismatch"):
+        next(iterator)
 
 
 @needs_moto

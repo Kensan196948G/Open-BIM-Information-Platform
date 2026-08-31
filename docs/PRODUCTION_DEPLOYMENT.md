@@ -8,6 +8,7 @@
 
 - [ ] 本番ドメイン（例: `open-bim.mirai-dx-platform.com`）とDNS（A/Tunnelレコード）
 - [ ] TLS証明書（Let's Encrypt等。nginxは `certs/fullchain.pem` / `certs/privkey.pem` を参照）
+- [ ] `.env` の `NGINX_RUNTIME_UID` が `stat -c %u certs/privkey.pem` と一致（秘密鍵mode 0600を維持）
 - [ ] 本番ホスト（VM/オンプレ）とSSH接続・Docker Compose v2.24+・`!override`対応
 - [ ] 本番DB（Neonプロジェクトまたは自前PostgreSQL 15+）
 - [ ] 本番用 `.env`（`.env.production.example` を雛形に強力な値で作成）
@@ -35,20 +36,19 @@ neonctl connection-string --project-id <project-id> --branch main --role bim_use
 
 ### バックアップ（Tunnel/ホスト PostgreSQL 構成時）
 
-`scripts/backup.sh` は docker 構成（bim_postgres コンテナ）向けのため、ホスト PostgreSQL で
-運用している間は以下の手順で日次バックアップする（`BACKUP_ENCRYPTION_KEY` は `.env.production` を source）：
+`scripts/backup.sh`の`host` modeで、systemd backendと同じLocal PostgreSQL / MinIOを一つの
+暗号化復旧点として取得する。実行前に書込みを停止し、対象Endpointを確認する。
 
 ```bash
 set -a; source .env.production; set +a
-TS=$(date +%Y%m%d-%H%M%S); TMP=$(mktemp -d)
-PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h 127.0.0.1 -U "$POSTGRES_USER" -d bim_prod | gzip > "$TMP/bim_prod.sql.gz"
-PGPASSWORD=bim_password pg_dump -h 127.0.0.1 -U bim_user -d bim_mvp | gzip > "$TMP/bim_mvp.sql.gz"
-tar -czf - -C "$TMP" . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_ENCRYPTION_KEY > "backups/backup-$TS.tar.gz.enc"
-rm -rf "$TMP"   # 世代管理: 7 日より古い backup-*.tar.gz.enc を削除
+POSTGRES_BACKUP_MODE=host \
+MINIO_BACKUP_MODE=host \
+BACKUP_MAINTENANCE_CONFIRMED=true \
+./scripts/backup.sh
 ```
 
-復元は `openssl enc -d ... | tar -xzO ./bim_<env>.sql.gz | gunzip | psql ...` で実施
-（2026-08-18 に分離コンテナへの復元演習済み: users=6 / containers=11 / projects=3）。
+Scriptはsource PostgreSQL majorと`pg_dump` majorを一致させ、DB全`storage_key`とMinIO Object数を
+暗号化前に照合する。復元は`restore-drill.sh`で同major PostgreSQL + MinIOの隔離環境へ行う。
 
 ## 3. GitHub Secrets 設定
 
@@ -97,6 +97,9 @@ neonctl connection-string --project-id <project-id> --branch main --role bim_use
 
 ```bash
 cp .env.production.example .env   # 強力な値に編集
+# NGINX_RUNTIME_UID=$(stat -c %u certs/privkey.pem)
+# NGINX_RUNTIME_GID=$(stat -c %g certs/privkey.pem)
+./scripts/deploy.sh preflight
 ./scripts/deploy.sh local origin/main
 ```
 
@@ -108,9 +111,15 @@ cp .env.production.example .env   # 強力な値に編集
 ### デプロイ後スモーク
 
 ```bash
-curl -f https://<domain>/health
+curl -f https://<domain>/health  # liveness
+curl -f https://<domain>/ready   # DB/Redis/Storage/AV release readiness
 curl -ksI https://<domain>/ | grep -i content-security-policy
+docker compose -f docker-compose.prod.yml exec frontend id  # uid=0ではないこと
 ```
+
+frontendは非root nginxとしてcontainer内の8080/8443をlistenし、hostの80/443へmapする。
+`cap_drop: ALL`、`no-new-privileges`、read-only root filesystemを適用するため、TLS秘密鍵の
+owner UIDとimage runtime UIDが不一致ならdeploy preflightで停止する。秘密鍵をgroup/world-readableにしない。
 
 ### 公開環境の常駐化（systemd user ユニット、2026-08-18 導入）
 
@@ -139,10 +148,10 @@ DBマイグレーションのロールバックは `alembic downgrade -1`（`doc
 
 ```bash
 # cron / systemd timer で日次実行
-MONITOR_HEALTH_URL=https://<domain>/health ./scripts/monitor.sh
+MONITOR_READY_URL=https://<domain>/ready ./scripts/monitor.sh
 ```
 
-- 障害時の一次確認: `curl -f https://open-bim.mirai-dx-platform.com/health` →
+- 障害時の一次確認: `curl -f https://open-bim.mirai-dx-platform.com/ready` →
   失敗時は `systemctl --user status open-bim-*` と `journalctl --user -u open-bim-*` で確認
 
 - `docs/OPS_LEDGER.md` の日次/週次/月次/四半期項目を担当者へ割当

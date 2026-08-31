@@ -16,6 +16,9 @@ on:
         default: "main"
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Deploy to ${{ inputs.environment }}
@@ -49,10 +52,17 @@ jobs:
             "cd ${PROD_DIR} && git fetch origin --tags && git checkout --detach '${{ inputs.commit_sha }}' && ./scripts/deploy.sh local '${{ inputs.commit_sha }}'"
       - name: Smoke test
         run: |
-          HEALTH_URL="${HEALTH_URL:-https://$(echo $PROD_HOST | cut -d@ -f2)}/health"
+          if [[ -z "${READY_URL:-}" && -n "${HEALTH_URL:-}" ]]; then
+            READY_URL="${HEALTH_URL%/health}/ready"
+          fi
+          READY_URL="${READY_URL:-https://$(echo $PROD_HOST | cut -d@ -f2)/ready}"
           for i in $(seq 1 20); do
-            if curl -sf "$HEALTH_URL" >/dev/null 2>&1; then echo "✅ /health OK"; exit 0; fi
+            if curl -fsS --max-time 10 "$READY_URL" 2>/dev/null \
+              | python3 scripts/validate_health_response.py --ready; then
+              echo "✅ /ready OK"
+              exit 0
+            fi
             sleep 5
           done
-          echo "❌ /health スモーク失敗" >&2
+          echo "❌ /ready スモーク失敗（DB/Redis/Storage/AV readinessを期待）" >&2
           exit 1

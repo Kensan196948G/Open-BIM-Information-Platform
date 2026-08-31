@@ -22,7 +22,7 @@
                     └──────────────────┬──────────────────┘
                                        │ HTTPS
                     ┌──────────────────▼──────────────────┐
-                    │   Reverse Proxy (nginx / TLS終端)     │
+                    │ Reverse Proxy (非root nginx / TLS終端) │
                     └────────┬───────────────────┬─────────┘
                              │                   │
                   ┌──────────▼─────────┐  ┌──────▼──────────┐
@@ -41,6 +41,19 @@
               │  ・immutable監査 │    └────────────────────┘  └──────────────────┘
               └─────────────────┘
 ```
+
+production frontendはhost 80/443をcontainer 8080/8443へmapし、非root nginxでTLS終端する。
+runtime root filesystemはread-only、Linux capabilityは全dropし、`no-new-privileges`を強制する。
+mode 0600のTLS秘密鍵は権限を緩和せず、build時のnumeric runtime UIDをhost側owner UIDへ一致させる。
+production backendもmulti-stage imageのUID 10001で実行し、read-only root filesystem、
+Linux capability全drop、`no-new-privileges`を適用する。書込み先はupload用`/tmp`と
+legacy download用tmpfsだけに限定する。
+
+file uploadはDB SHA-256とS3 `ChecksumSHA256`を同時に記録する。authenticated downloadは
+Content-Length・S3 checksum・DB checksumを開始前に照合し、新規objectを一時fileなしで
+streamする。protocol checksumのないlegacy objectだけを事前検証用一時fileへspoolし、
+全worker共有quotaとtmpfs hard capで容量を制御する。詳細は
+`docs/ADR/ADR-005-verified-download-streaming.md`を参照。
 
 ---
 
