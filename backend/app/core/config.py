@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     MINIO_SECURE: bool = False
     MINIO_BUCKET: str = "bim-containers"
 
+    # Legacy objects without an S3 protocol checksum are downloaded to
+    # temporary storage before their DB checksum is trusted. The quota is
+    # shared between workers through reservation files in this directory.
+    DOWNLOAD_TEMP_DIR: str = "/tmp/open-bim-downloads"
+    DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES: int = 512 * 1024 * 1024
+    DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES: int = 1024 * 1024 * 1024
+
     # CORS
     CORS_ORIGINS: str = "http://localhost:5173"
 
@@ -98,6 +105,22 @@ class Settings(BaseSettings):
         return [
             d.strip().lower() for d in self.OIDC_ALLOWED_DOMAINS.split(",") if d.strip()
         ]
+
+    @model_validator(mode="after")
+    def validate_download_temp_limits(self) -> "Settings":
+        if self.DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES <= 0:
+            raise ValueError("DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES must be positive")
+        if (
+            self.DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES
+            < self.DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES
+        ):
+            raise ValueError(
+                "DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES must be greater than or equal "
+                "to DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES"
+            )
+        if not self.DOWNLOAD_TEMP_DIR.strip():
+            raise ValueError("DOWNLOAD_TEMP_DIR must not be empty")
+        return self
 
     @model_validator(mode="after")
     def validate_production_security(self) -> "Settings":

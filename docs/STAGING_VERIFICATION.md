@@ -67,3 +67,18 @@
   request/response bufferingによる一時disk使用なし
 - production/demo imageともTrivy High/Critical vulnerability 0、Dockerfile misconfiguration 0
 - 本番systemd/Cloudflare環境への反映はPR #48のHuman Gate後に実施
+
+## 2026-08-31 verified download streaming追試
+
+- 固定MinIO releaseへ`ChecksumSHA256`付きobjectをPUTし、`ChecksumMode=ENABLED`のGETで
+  同一SHA-256 headerとbodyを取得できることを実測
+- protocol checksum付きobjectは一時reservationなしでstreamし、legacy objectだけが
+  SHA-256事前検証とworker共有quotaを使用するunit/API testを追加
+- legacy quotaはper-request超過413、全worker予約超過429 + `Retry-After: 30`、
+  filesystem不足507へfail-closed
+- File System Access APIのstream開始前失敗時にもdestinationをabortするfrontend testを追加
+- 500MiB・並列・切断の実MinIO検証結果はPR #48のTest Resultへ記録する
+- backend imageをPython 3.11.13 digest固定multi-stageへ変更し、runtime UID 10001、
+  capability 0、`NoNewPrivs=1`、read-only rootfs、runtime pip/test dependencyなしを実測
+- backend image Trivy High/Criticalは変更前OS 24/Python 3から変更後0、
+  Dockerfile misconfiguration 0へ改善

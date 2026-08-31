@@ -94,6 +94,20 @@ def test_invalid_rate_limit_backend_rejected_in_production() -> None:
         _strong_production(RATE_LIMIT_BACKEND="file")
 
 
+def test_download_temp_global_limit_must_cover_request_limit() -> None:
+    with pytest.raises(ValidationError, match="DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES"):
+        Settings(
+            _env_file=None,
+            DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES=20,
+            DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES=10,
+        )
+
+
+def test_download_temp_request_limit_must_be_positive() -> None:
+    with pytest.raises(ValidationError, match="DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES"):
+        Settings(_env_file=None, DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES=0)
+
+
 def test_self_registration_optional_in_development() -> None:
     settings = Settings(_env_file=None)
     assert settings.ALLOW_SELF_REGISTRATION is True

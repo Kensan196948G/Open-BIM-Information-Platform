@@ -99,7 +99,7 @@ graph TB
 | ✅ Pydantic | v2 | データバリデーション・シリアライゼーション |
 | 🔐 python-jose | latest | JWT トークン処理 |
 | 🔑 passlib / bcrypt | latest | パスワードハッシュ |
-| 📦 aioboto3 | latest | MinIO/S3 非同期クライアント |
+| 📦 boto3 | 1.36以上・2.0未満 | MinIO/S3 client。checksum付きdownloadはsync iteratorをthreadpoolでchunk配信 |
 | 🔌 httpx | latest | 非同期 HTTP クライアント（テスト用） |
 
 ### 🗄️ データ・インフラ

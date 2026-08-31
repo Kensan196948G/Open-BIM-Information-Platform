@@ -108,6 +108,9 @@ services:
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set in .env}
+      DOWNLOAD_TEMP_DIR: /var/tmp/open-bim-downloads
+      DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES: ${DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES:-536870912}
+      DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES: ${DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES:-1073741824}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
       ALLOW_SELF_REGISTRATION: ${ALLOW_SELF_REGISTRATION:?ALLOW_SELF_REGISTRATION must be set in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set in .env}
@@ -131,6 +134,17 @@ services:
     # Increase APP_WORKERS only after confirming Redis availability and
     # running the smoke load test (scripts/smoke_load_test.py).
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${APP_WORKERS:-2}
+    read_only: true
+    tmpfs:
+      - /tmp:size=600m,mode=1777
+      # Must remain larger than DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES. The
+      # application reservation is the normal concurrency gate; tmpfs is the
+      # final host-filesystem protection if a worker fails mid-write.
+      - /var/tmp/open-bim-downloads:size=${DOWNLOAD_TEMP_TMPFS_SIZE:-1100m},mode=0700,uid=10001,gid=10001
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test:
         [

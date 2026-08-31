@@ -399,6 +399,53 @@ async def test_download_rejects_checksum_mismatch(client: AsyncClient, mock_s3):
 
 @needs_moto
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("storage_error", "expected_status", "expected_retry_after"),
+    [
+        ("DownloadTooLargeError", 413, None),
+        ("DownloadQuotaExceededError", 429, "30"),
+        ("DownloadStorageFullError", 507, None),
+    ],
+)
+async def test_download_maps_temporary_storage_failures(
+    client: AsyncClient,
+    mock_s3,
+    monkeypatch,
+    storage_error: str,
+    expected_status: int,
+    expected_retry_after: str | None,
+):
+    from app.services import storage as storage_svc
+
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(
+        client, f"{storage_error}@ex.com", storage_error
+    )
+    await _add_membership(user_id, org_id)
+    cid = await _create_container(client, token, proj_id)
+    upload_res = await client.post(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("drawing.pdf", b"content", "application/pdf")},
+    )
+    file_id = upload_res.json()["id"]
+    error_type = getattr(storage_svc, storage_error)
+
+    def fail_download(*_args):
+        raise error_type
+
+    monkeypatch.setattr(storage_svc, "open_verified_file", fail_download)
+    response = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{cid}/files/{file_id}/download",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == expected_status
+    assert response.headers.get("retry-after") == expected_retry_after
+
+
+@needs_moto
+@pytest.mark.asyncio
 async def test_list_files_returns_uploads(client: AsyncClient, mock_s3):
     """GET /files returns uploaded files with metadata (newest first)."""
     org_id, proj_id = await _setup_org_project()

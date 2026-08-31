@@ -16,6 +16,7 @@ import {
   deleteFile,
   downloadFile,
   downloadFileToWritable,
+  DownloadHttpError,
   listContainerRevisions,
   listFiles,
 } from "@/api/containers";
@@ -125,7 +126,17 @@ export default function ContainerDetailPage() {
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
     },
-    onError: () => setDownloadError("ファイルを取得できませんでした。ストレージの状態を確認してください。"),
+    onError: (error) => {
+      if (error instanceof DownloadHttpError && error.status === 429) {
+        setDownloadError("同時ダウンロードの上限に達しました。30秒後に再試行してください。");
+        return;
+      }
+      if (error instanceof DownloadHttpError && error.status === 507) {
+        setDownloadError("一時保存領域を使用できません。管理者へ連絡してください。");
+        return;
+      }
+      setDownloadError("ファイルを取得できませんでした。ストレージの状態を確認してください。");
+    },
   });
 
   const startDownload = async (file: (typeof files)[number]) => {

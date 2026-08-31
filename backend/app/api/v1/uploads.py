@@ -115,7 +115,7 @@ async def _read_streaming(file: UploadFile) -> bytes:
         total += len(chunk)
         if total > MAX_FILE_SIZE:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=f"File exceeds maximum size of {MAX_FILE_SIZE // (1024 * 1024)} MB",
             )
         chunks.append(chunk)
@@ -459,7 +459,24 @@ async def download_file(
             storage_svc.open_verified_file,
             file_record.storage_key,
             file_record.checksum_sha256,
+            file_record.file_size_bytes,
         )
+    except storage_svc.DownloadTooLargeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="File exceeds the configured download limit",
+        ) from exc
+    except storage_svc.DownloadQuotaExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Temporary download capacity is busy; retry later",
+            headers={"Retry-After": "30"},
+        ) from exc
+    except storage_svc.DownloadStorageFullError as exc:
+        raise HTTPException(
+            status_code=507,
+            detail="Temporary download storage is unavailable",
+        ) from exc
     except storage_svc.StorageIntegrityError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -475,11 +492,7 @@ async def download_file(
     encoded_name = quote(file_record.original_filename[:500], safe="")
 
     def chunks():
-        try:
-            while chunk := body.read(1024 * 1024):
-                yield chunk
-        finally:
-            body.close()
+        yield from body.iter_chunks()
 
     return StreamingResponse(
         chunks(),

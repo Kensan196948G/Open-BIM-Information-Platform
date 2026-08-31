@@ -29,6 +29,15 @@ jobs:
       - name: mypy
         # Production code only; test files are covered by ruff + pytest.
         run: mypy app
+      - name: Build hardened backend image
+        working-directory: .
+        run: docker build -t open-bim-backend:ci backend
+      - name: Verify backend runtime metadata
+        working-directory: .
+        run: |
+          test "$(docker image inspect open-bim-backend:ci --format '{{.Config.User}}')" = "10001:10001"
+          docker run --rm open-bim-backend:ci python -c "import app.main"
+          docker run --rm open-bim-backend:ci sh -c '! command -v pip'
 
   backend-test:
     name: Backend Tests

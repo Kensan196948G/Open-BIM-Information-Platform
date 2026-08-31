@@ -154,6 +154,24 @@ curl http://localhost:8000/ready
 | MinIO ディスク使用率 | > 80%         | 容量追加       |
 | 5xx エラー率         | > 1%          | 即時調査       |
 
+### 大容量download一時領域
+
+新規uploadはS3 SHA-256付きで直接streamするため、一時diskを使用しない。checksumを持たない
+legacy objectだけが`DOWNLOAD_TEMP_DIR`を使用する。本番既定値はper-request 512MiB、
+全worker合計1GiB、Compose tmpfs 1100MiBである。
+
+```bash
+docker compose -f docker-compose.prod.yml exec backend \
+  sh -c 'df -h /var/tmp/open-bim-downloads; ls -la /var/tmp/open-bim-downloads'
+```
+
+- HTTP 429 + `Retry-After: 30`: 同時legacy downloadの終了を待って再試行する
+- HTTP 507: tmpfs使用量、stale worker、設定値と`DOWNLOAD_TEMP_TMPFS_SIZE`の大小を確認する
+- `.reservation-*.json`はactive workerが保持するため手動削除しない。worker異常終了分は次回予約時に
+  PIDとprocess start timeを照合して自動回収する
+- tmpfsは`DOWNLOAD_TEMP_GLOBAL_LIMIT_BYTES`より大きくする
+- browser保存方針とintegrity failureは`docs/ADR/ADR-005-verified-download-streaming.md`を参照する
+
 ---
 
 ## 💾 バックアップ・リストア
@@ -209,6 +227,8 @@ mc mirror local/bim-containers /backup/minio/$(date +%Y%m%d)/
 - **TLS**: リバースプロキシ（nginx 等）で TLS 終端。バックエンドは内部通信のみ
 - **frontend runtime**: 非root UID、container 8080/8443、`cap_drop: ALL`、read-only rootfs。
   deploy前に`./scripts/deploy.sh preflight`でTLS秘密鍵owner UIDとの一致を確認
+- **backend runtime**: multi-stage production dependencyのみ、UID 10001、`cap_drop: ALL`、
+  read-only rootfs。`/tmp`とlegacy download tmpfsだけ書込み可能
 - **監査ログ監視**: 認証失敗・権限変更イベントを定期レビュー
 - **依存更新**: 月次で `npm audit` / `pip-audit` 実行、Critical/High は即対応
 - **バックアップ暗号化**: バックアップファイルは暗号化保存

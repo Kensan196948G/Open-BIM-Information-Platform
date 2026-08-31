@@ -31,6 +31,13 @@ export async function downloadFile(
   return res.data;
 }
 
+export class DownloadHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Download failed (${status})`);
+    this.name = "DownloadHttpError";
+  }
+}
+
 async function fetchDownload(path: string): Promise<Response> {
   const request = (token: string | null) =>
     fetch(path, {
@@ -54,7 +61,7 @@ async function fetchDownload(path: string): Promise<Response> {
     localStorage.removeItem("refresh_token");
     window.location.href = "/login";
   }
-  if (!response.ok) throw new Error(`Download failed (${response.status})`);
+  if (!response.ok) throw new DownloadHttpError(response.status);
   return response;
 }
 
@@ -64,10 +71,17 @@ export async function downloadFileToWritable(
   fileId: string,
   writable: FileSystemWritableFileStream,
 ): Promise<void> {
-  const path = `/api/v1/projects/${encodeURIComponent(projectId)}/containers/${encodeURIComponent(containerId)}/files/${encodeURIComponent(fileId)}/download`;
-  const response = await fetchDownload(path);
-  if (!response.body) throw new Error("Download stream is unavailable");
-  await response.body.pipeTo(writable);
+  try {
+    const path = `/api/v1/projects/${encodeURIComponent(projectId)}/containers/${encodeURIComponent(containerId)}/files/${encodeURIComponent(fileId)}/download`;
+    const response = await fetchDownload(path);
+    if (!response.body) throw new Error("Download stream is unavailable");
+    await response.body.pipeTo(writable);
+  } catch (error) {
+    // A failed fetch before pipeTo starts otherwise leaves the temporary save
+    // handle open. abort() also preserves an existing destination file.
+    await writable.abort(error).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function listContainers(
