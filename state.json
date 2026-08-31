@@ -15,8 +15,8 @@
     "ci_success_rate": 1,
     "ci_all_jobs_pass": true,
     "ci_jobs": 9,
-    "ci_last_run": "33356245605",
-    "ci_consecutive_success": 13,
+    "ci_last_run": "33358850450",
+    "ci_consecutive_success": 15,
     "test_pass_rate": 1,
     "test_count": 363,
     "backend_test_count": 321,
@@ -26,7 +26,7 @@
     "npm_vulnerabilities_high": 0,
     "security_critical": 0,
     "blocker_count": 3,
-    "open_issues": 4,
+    "open_issues": 3,
     "stable_achieved": false,
     "stable_n": 5,
     "deploy_ready": false
@@ -69,7 +69,8 @@
     "#20: RequirementsPage 実API接続 (PR #22 — merged 2026-06-17)",
     "#15: Requirements Documents API (PR #17 — merged 2026-06-17)",
     "containers-coverage: 6 new tests added (full CDE lifecycle, auth guards, pagination) — PR #14 (2026-06-14)",
-    "#naming-rules-platform-admin: 3 platform admin bypass tests for GET/PUT/DELETE naming-rules API"
+    "#naming-rules-platform-admin: 3 platform admin bypass tests for GET/PUT/DELETE naming-rules API",
+    "#49: frontend production/demo nginx runtime非root化、非特権port、capability全drop、read-only rootfs、TLS UID preflight"
   ],
   "blocked_issues": [
     "P0 (#47): 公開systemd backendのMinIO 127.0.0.1:9010が停止し、DB file metadataとobject storageが不整合",
@@ -94,7 +95,7 @@
     "codex_adversarial": "timeout_fallback_to_subagent",
     "internal_review": "completed",
     "adversarial_review": "completed (subagent)",
-    "findings_fixed": 13,
+    "findings_fixed": 14,
     "critical_high_open": 0
   },
   "quality": {
@@ -113,7 +114,7 @@
     "cto_decision_at": "2026-08-31",
     "ci_all_green": true,
     "ci_jobs": 9,
-    "ci_last_run": "33356245605",
+    "ci_last_run": "33358850450",
     "stable_achieved": false,
     "stable_consecutive_green": 5,
     "docs_complete": true,
@@ -167,7 +168,8 @@
       "NamingRule dataclass designed for DI — DB model stores JSON, service converts to dataclass",
       "react-refresh/only-export-components: move non-component exports to lib/fmt.ts",
       "Playwright E2E mock-mode: use real authenticate() helper (live backend always up in CI) — mock tokens trigger api.ts 401 interceptor and redirect to /login",
-      "Local PostgreSQL backup/restoreはsource DBとpg_dump/restore imageのmajor versionを合わせ、--no-owner --no-acl と ON_ERROR_STOPを使う。"
+      "Local PostgreSQL backup/restoreはsource DBとpg_dump/restore imageのmajor versionを合わせ、--no-owner --no-acl と ON_ERROR_STOPを使う。",
+      "mode 0600のTLS秘密鍵を非root containerから読む場合、権限を緩和せずnumeric runtime UIDをhost owner UIDへ一致させ、deploy preflightでfail-closedにする。"
     ],
     "usage_history": {
       "skills": {

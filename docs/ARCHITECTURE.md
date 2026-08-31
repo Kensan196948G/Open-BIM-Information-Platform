@@ -22,7 +22,7 @@
                     └──────────────────┬──────────────────┘
                                        │ HTTPS
                     ┌──────────────────▼──────────────────┐
-                    │   Reverse Proxy (nginx / TLS終端)     │
+                    │ Reverse Proxy (非root nginx / TLS終端) │
                     └────────┬───────────────────┬─────────┘
                              │                   │
                   ┌──────────▼─────────┐  ┌──────▼──────────┐
@@ -41,6 +41,10 @@
               │  ・immutable監査 │    └────────────────────┘  └──────────────────┘
               └─────────────────┘
 ```
+
+production frontendはhost 80/443をcontainer 8080/8443へmapし、非root nginxでTLS終端する。
+runtime root filesystemはread-only、Linux capabilityは全dropし、`no-new-privileges`を強制する。
+mode 0600のTLS秘密鍵は権限を緩和せず、build時のnumeric runtime UIDをhost側owner UIDへ一致させる。
 
 ---
 

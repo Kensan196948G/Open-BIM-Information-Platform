@@ -13,6 +13,13 @@ services:
       - VITE_API_BASE_URL=http://localhost:8000
     ports:
       - "${DEMO_PORT:-3000}:3000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 networks:

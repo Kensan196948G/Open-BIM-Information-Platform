@@ -146,20 +146,30 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NGINX_RUNTIME_UID: ${NGINX_RUNTIME_UID:-1000}
+        NGINX_RUNTIME_GID: ${NGINX_RUNTIME_GID:-1000}
     container_name: bim_frontend
     ports:
-      - "80:80"
-      - "443:443"
+      - "80:8080"
+      - "443:8443"
     volumes:
       - ./certs:/etc/nginx/certs:ro
     depends_on:
       backend:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ready || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ready || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
 volumes:

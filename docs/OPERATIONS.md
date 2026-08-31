@@ -21,7 +21,7 @@
 
 | サービス    | ポート      | 役割                  | ヘルスチェック           |
 | ----------- | ----------- | --------------------- | ------------------------ |
-| 🖥️ frontend | 5173 / 80   | React SPA             | `GET /`                  |
+| 🖥️ frontend | host 80/443 → container 8080/8443 | React SPA / TLS（非root nginx） | `GET /ready` |
 | 🗄️ backend  | 8000        | FastAPI               | `GET /health` / `GET /ready` |
 | 🐘 postgres | 5432        | メタデータDB          | `pg_isready`             |
 | 🔴 redis    | 6379        | キャッシュ/セッション | `redis-cli ping`         |
@@ -70,6 +70,7 @@ docker compose -f docker-compose.prod.yml up -d
 # 7. ヘルスチェック確認
 curl -f http://localhost:8000/health
 curl -f http://localhost:8000/ready
+docker compose -f docker-compose.prod.yml exec frontend id
 # → {"status":"ok","version":"0.1.0"}
 ```
 
@@ -206,6 +207,8 @@ mc mirror local/bim-containers /backup/minio/$(date +%Y%m%d)/
 
 - **シークレット管理**: `.env` は git 管理外。本番は Vault / Secrets Manager 推奨
 - **TLS**: リバースプロキシ（nginx 等）で TLS 終端。バックエンドは内部通信のみ
+- **frontend runtime**: 非root UID、container 8080/8443、`cap_drop: ALL`、read-only rootfs。
+  deploy前に`./scripts/deploy.sh preflight`でTLS秘密鍵owner UIDとの一致を確認
 - **監査ログ監視**: 認証失敗・権限変更イベントを定期レビュー
 - **依存更新**: 月次で `npm audit` / `pip-audit` 実行、Critical/High は即対応
 - **バックアップ暗号化**: バックアップファイルは暗号化保存

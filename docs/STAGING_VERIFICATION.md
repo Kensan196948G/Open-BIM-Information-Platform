@@ -55,3 +55,15 @@
 
 - ステージング品質ゲート: **GO**
 - 本番デプロイ: **未実施**（本番環境・ドメイン・Secretsが未確定のため）
+
+## 2026-08-31 frontend非root追試
+
+- `nginxinc/nginx-unprivileged:1.30.4-alpine`をdigest固定し、production runtime UIDを
+  mode 0600 TLS秘密鍵のowner UIDへ一致させた隔離containerで検証
+- container 8080/8443、host 80/443 mappingをComposeで解決確認
+- UID/GID 1000、全Linux capability 0、`NoNewPrivs=1`、read-only rootfsを実測
+- HTTP redirect、HTTPS SPA、security headers、API・health・readiness proxyが成功
+- 500MiB upload/download proxyが各HTTP 200。64MiB `/tmp` tmpfs使用量は4KiBで、
+  request/response bufferingによる一時disk使用なし
+- production/demo imageともTrivy High/Critical vulnerability 0、Dockerfile misconfiguration 0
+- 本番systemd/Cloudflare環境への反映はPR #48のHuman Gate後に実施

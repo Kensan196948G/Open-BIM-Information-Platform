@@ -8,6 +8,7 @@
 
 - [ ] 本番ドメイン（例: `open-bim.mirai-dx-platform.com`）とDNS（A/Tunnelレコード）
 - [ ] TLS証明書（Let's Encrypt等。nginxは `certs/fullchain.pem` / `certs/privkey.pem` を参照）
+- [ ] `.env` の `NGINX_RUNTIME_UID` が `stat -c %u certs/privkey.pem` と一致（秘密鍵mode 0600を維持）
 - [ ] 本番ホスト（VM/オンプレ）とSSH接続・Docker Compose v2.24+・`!override`対応
 - [ ] 本番DB（Neonプロジェクトまたは自前PostgreSQL 15+）
 - [ ] 本番用 `.env`（`.env.production.example` を雛形に強力な値で作成）
@@ -97,6 +98,9 @@ neonctl connection-string --project-id <project-id> --branch main --role bim_use
 
 ```bash
 cp .env.production.example .env   # 強力な値に編集
+# NGINX_RUNTIME_UID=$(stat -c %u certs/privkey.pem)
+# NGINX_RUNTIME_GID=$(stat -c %g certs/privkey.pem)
+./scripts/deploy.sh preflight
 ./scripts/deploy.sh local origin/main
 ```
 
@@ -111,7 +115,12 @@ cp .env.production.example .env   # 強力な値に編集
 curl -f https://<domain>/health  # liveness
 curl -f https://<domain>/ready   # DB/Redis/Storage/AV release readiness
 curl -ksI https://<domain>/ | grep -i content-security-policy
+docker compose -f docker-compose.prod.yml exec frontend id  # uid=0ではないこと
 ```
+
+frontendは非root nginxとしてcontainer内の8080/8443をlistenし、hostの80/443へmapする。
+`cap_drop: ALL`、`no-new-privileges`、read-only root filesystemを適用するため、TLS秘密鍵の
+owner UIDとimage runtime UIDが不一致ならdeploy preflightで停止する。秘密鍵をgroup/world-readableにしない。
 
 ### 公開環境の常駐化（systemd user ユニット、2026-08-18 導入）
 
