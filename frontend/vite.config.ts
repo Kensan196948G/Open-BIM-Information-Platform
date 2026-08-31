@@ -13,6 +13,10 @@ const backendProxy = {
     target: backendTarget,
     changeOrigin: true,
   },
+  "/ready": {
+    target: backendTarget,
+    changeOrigin: true,
+  },
 };
 
 export default defineConfig({

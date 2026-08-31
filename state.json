@@ -18,8 +18,8 @@
     "ci_last_run": "33356245605",
     "ci_consecutive_success": 13,
     "test_pass_rate": 1,
-    "test_count": 353,
-    "backend_test_count": 311,
+    "test_count": 363,
+    "backend_test_count": 321,
     "frontend_test_count": 27,
     "e2e_test_count": 15,
     "lint_errors": 0,
@@ -74,7 +74,7 @@
   "blocked_issues": [
     "P0 (#47): 公開systemd backendのMinIO 127.0.0.1:9010が停止し、DB file metadataとobject storageが不整合",
     "P0: 完全バックアップなし（2026-08-31のDB-only backupは復元済みだがMinIO未収録）",
-    "P1: 公開health proxy・authenticated streaming downloadは未デプロイ（PR/CI待ち）"
+    "P1: 公開health/readiness proxy・authenticated downloadは未デプロイ（PR/CI待ち）"
   ],
   "production_gate": {
     "status": "live_via_tunnel",
@@ -109,7 +109,7 @@
   },
   "release_readiness": {
     "status": "no_go_storage_recovery_required",
-    "cto_decision": "NO-GO（MinIO・完全backup・公開health未達）",
+    "cto_decision": "NO-GO（MinIO・完全backup・公開readiness未達）",
     "cto_decision_at": "2026-08-31",
     "ci_all_green": true,
     "ci_jobs": 9,
@@ -122,7 +122,7 @@
     "remaining_for_production": [
       "MinIO service復旧とDB metadata 8件に対応するobject integrity確認",
       "MinIOを含む完全backupと隔離restore drill",
-      "health/download修正のPR・CI・公開反映後health check",
+      "health/readiness/download修正のPR・CI・公開反映後health check",
       "Redis/ClamAVのsystemd backend接続と監視通知先の確定",
       "Human sign-off (mandatory for production deploy)"
     ]
@@ -156,7 +156,7 @@
       "bcrypt 5.x + Python 3.12: use bcrypt directly, not passlib",
       "container_files + container_revisions: circular FK requires no-FK on one side",
       "FastAPI HTTPBearer: get_current_user raises 401 credentials_exception — POST /api/v1/workflows without auth returns 401, not 403. Assert 401 in E2E tests.",
-      "HTTP 200だけのhealth probeはSPA fallback HTMLを正常扱いする。JSON status/database契約まで検証する。",
+      "HTTP 200だけのhealth probeはSPA fallback HTMLを正常扱いする。livenessと、DB/Redis/Storage/AVを検証するrelease readinessを分離し、JSON契約まで検証する。",
       "DB-only backupのretentionをfull backupと共用すると、完全復旧点を失う。backup種別ごとに世代管理を分離する。",
       "systemd host processとDocker dependencyを混在させる場合、loopback port・Credential・公開URLの到達性を個別に検証する。"
     ],

@@ -22,7 +22,7 @@
 | サービス    | ポート      | 役割                  | ヘルスチェック           |
 | ----------- | ----------- | --------------------- | ------------------------ |
 | 🖥️ frontend | 5173 / 80   | React SPA             | `GET /`                  |
-| 🗄️ backend  | 8000        | FastAPI               | `GET /health`            |
+| 🗄️ backend  | 8000        | FastAPI               | `GET /health` / `GET /ready` |
 | 🐘 postgres | 5432        | メタデータDB          | `pg_isready`             |
 | 🔴 redis    | 6379        | キャッシュ/セッション | `redis-cli ping`         |
 | 📦 minio    | 9000 / 9001 | ファイルストレージ    | `GET /minio/health/live` |
@@ -69,12 +69,14 @@ docker compose -f docker-compose.prod.yml up -d
 
 # 7. ヘルスチェック確認
 curl -f http://localhost:8000/health
+curl -f http://localhost:8000/ready
 # → {"status":"ok","version":"0.1.0"}
 ```
 
 ### デプロイ後確認チェックリスト
 
-- [ ] `GET /health` が 200 を返す
+- [ ] `GET /health` が200を返す（liveness）
+- [ ] `GET /ready` が200を返し、DB/Redis/Storage/AVがready
 - [ ] `GET /api/docs` で OpenAPI ドキュメントが表示される
 - [ ] フロントエンドのログイン画面が表示される
 - [ ] テストユーザーでログイン → ダッシュボード遷移
@@ -117,7 +119,8 @@ docker compose run --rm backend alembic current
 
 | 症状                 | 対応                              |
 | -------------------- | --------------------------------- |
-| `GET /health` が 500 | 即時コードロールバック            |
+| `GET /health` が 503 | process/DBを確認し、必要なら即時コードロールバック |
+| `GET /ready` が 503 | responseのdependency項目を確認し、deployを停止 |
 | マイグレーション失敗 | `alembic downgrade -1` で復旧     |
 | データ不整合検出     | サービス停止 → DB リストア → 調査 |
 
@@ -138,6 +141,7 @@ docker compose exec postgres psql -U bim_user -d bim_platform \
 
 # ヘルスチェックエンドポイント
 curl http://localhost:8000/health
+curl http://localhost:8000/ready
 ```
 
 ### 監視すべきメトリクス

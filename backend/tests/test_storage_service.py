@@ -90,6 +90,25 @@ def test_get_s3_client_singleton(monkeypatch):
 
 
 @needs_moto
+def test_check_storage_succeeds_when_bucket_exists(s3_env):
+    """check_storage verifies access to the configured bucket."""
+    from app.services.storage import check_storage
+
+    check_storage()
+
+
+@needs_moto
+def test_check_storage_raises_when_bucket_is_missing(s3_env_no_bucket):
+    """check_storage surfaces a missing configured bucket."""
+    from botocore.exceptions import ClientError
+
+    from app.services.storage import check_storage
+
+    with pytest.raises(ClientError):
+        check_storage()
+
+
+@needs_moto
 def test_ensure_bucket_creates_when_missing(s3_env_no_bucket, monkeypatch):
     """ensure_bucket_exists creates the bucket when it does not exist."""
     from app.core.config import settings

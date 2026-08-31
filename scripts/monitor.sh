@@ -2,7 +2,7 @@
 #
 # monitor.sh — 定期監視（cron/systemd timer 想定）
 #
-# チェック: /health・ディスク・コンテナ健康状態・バックアップ鮮度・証明書期限
+# チェック: /ready・ディスク・コンテナ健康状態・バックアップ鮮度・証明書期限
 # 通知: MONITOR_WEBHOOK_URL（Slack/Teams互換）または MONITOR_MAIL_TO
 # 終了コード: 0=正常 / 1=Warning / 2=Critical
 #
@@ -21,13 +21,17 @@ note() {
   if [[ "$level" == "CRIT" ]]; then CRITICALS+=("$msg"); fi
 }
 
-# 1) 死活
-if [[ -n "${MONITOR_HEALTH_URL:-}" ]]; then
-  if curl -fsS --max-time 10 "$MONITOR_HEALTH_URL" 2>/dev/null \
-    | python3 "$PROJECT_DIR/scripts/validate_health_response.py"; then
-    echo "[OK] health: $MONITOR_HEALTH_URL"
+# 1) Release readiness
+if [[ -z "${MONITOR_READY_URL:-}" && -n "${MONITOR_HEALTH_URL:-}" ]]; then
+  MONITOR_READY_URL="${MONITOR_HEALTH_URL%/health}/ready"
+fi
+MONITOR_READY_URL="${MONITOR_READY_URL:-}"
+if [[ -n "$MONITOR_READY_URL" ]]; then
+  if curl -fsS --max-time 10 "$MONITOR_READY_URL" 2>/dev/null \
+    | python3 "$PROJECT_DIR/scripts/validate_health_response.py" --ready; then
+    echo "[OK] ready: $MONITOR_READY_URL"
   else
-    note CRIT "health 応答が不正（JSON status/database=ok を期待）: $MONITOR_HEALTH_URL"
+    note CRIT "readiness応答が不正（DB/Redis/Storage/AVを期待）: $MONITOR_READY_URL"
   fi
 fi
 

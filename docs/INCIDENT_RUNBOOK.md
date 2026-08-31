@@ -14,7 +14,7 @@
 
 ```
 1. 症状確認: 全ユーザーか一部か / いつから / 変更直後か
-2. ヘルスチェック: curl https://<host>/health
+2. Liveness / readiness: `curl https://<host>/health` と `curl https://<host>/ready`
 3. コンテナ状態: docker compose -f docker-compose.prod.yml ps
 4. ログ確認: docker compose -f docker-compose.prod.yml logs --tail=200 backend frontend
 5. リソース確認: docker stats / df -h / DB接続数
@@ -26,6 +26,7 @@
 | 症状 | 原因候補 | 対処 |
 |---|---|---|
 | `/health` 503（database=error） | DB停止・接続不可 | `docker compose ... up -d postgres` → ログ確認 → 復旧不能ならDBリストア |
+| `/ready` 503 | responseで`redis` / `storage` / `antivirus`の失敗箇所を特定 | 対象dependencyを復旧し、`/ready` 200を再確認 |
 | ログイン不可・401連発 | SECRET_KEY不一致・トークン失効 | `.env` のSECRET_KEY確認・バックエンド再起動 |
 | アップロード 503 | MinIO/ClamAV停止 | `docker compose ... up -d minio clamav` → healthcheck待ち |
 | 画面が真っ白 | フロントビルド不整合 | nginxログ確認 → イメージ再ビルド |
@@ -51,7 +52,7 @@ BACKUP_ENCRYPTION_KEY='...' ./scripts/restore-drill.sh backups/backup-<ts>.tar.g
 
 ## 5. 復旧・連絡・記録
 
-- 復旧確認: `/health` 200・主要機能スモーク・監査ログ記録
+- 復旧確認: `/health` 200・`/ready` 200・主要機能スモーク・監査ログ記録
 - 連絡: 影響範囲・復旧見込みを関係者へ（メール/Teams）
 - 記録: 発生日時・影響・原因・対処・再発防止を運用台帳と Issue に残す
 

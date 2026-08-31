@@ -35,17 +35,20 @@ run_local() {
   docker compose -f "$COMPOSE_FILE" up -d --no-deps migrate || true
   docker compose -f "$COMPOSE_FILE" up -d
 
-  echo "🔍 スモーク: /health"
-  HEALTH_URL="${HEALTH_URL:-http://127.0.0.1/health}"
+  echo "🔍 スモーク: /ready"
+  if [[ -z "${READY_URL:-}" && -n "${HEALTH_URL:-}" ]]; then
+    READY_URL="${HEALTH_URL%/health}/ready"
+  fi
+  READY_URL="${READY_URL:-http://127.0.0.1/ready}"
   for _ in $(seq 1 30); do
-    if curl -fsS --max-time 10 "$HEALTH_URL" 2>/dev/null \
-      | python3 "$PROJECT_DIR/scripts/validate_health_response.py"; then
-      echo "✅ /health OK"
+    if curl -fsS --max-time 10 "$READY_URL" 2>/dev/null \
+      | python3 "$PROJECT_DIR/scripts/validate_health_response.py" --ready; then
+      echo "✅ /ready OK"
       return 0
     fi
     sleep 2
   done
-  echo "❌ /health が正常なJSONを返しません（status/database=ok を期待）" >&2
+  echo "❌ /ready が依存サービスを含む正常なJSONを返しません" >&2
   return 1
 }
 

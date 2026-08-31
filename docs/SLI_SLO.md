@@ -6,7 +6,7 @@
 
 | SLI | 定義 | 計測方法 |
 |---|---|---|
-| 可用性 | `/health` が 200 かつ JSON `status=ok` / `database=ok` を返した時間割合 | ヘルスチェックプローブ（例: 30秒間隔） |
+| 可用性 | `/ready` が200かつDB・Redis（設定時）・Storage・AV（設定時）がreadyである時間割合 | 外部readinessプローブ（例: 30秒間隔） |
 | 応答時間 | API 主要エンドポイントの p95 応答時間 | アプリログのレイテンシ集計 |
 | エラー率 | 5xx 応答 / 全応答 | アプリログ・リバースプロキシログ |
 | バックアップ成功率 | 日次バックアップの成功数 / 実行数 | バックアップスクリプトの exit code |
@@ -34,7 +34,8 @@
 
 ## 4. 監視対象と確認方法（本番環境確定後）
 
-- 死活: `GET /health`（HTTP 200だけでなく JSON `status=ok` / `database=ok` を検証。DB必須・Redis参考）
+- Liveness: `GET /health`（process/DBを確認。Redisは参考情報）
+- Release readiness: `GET /ready`（DB・設定上必須のRedis/Storage/AVを全て検証）
 - リソース: `docker stats` / `df -h`（スクリプト化推奨）
 - ログ: `docker compose logs` / journald（構造化ログは structlog）
 - バックアップ: `scripts/backup.sh` の exit code と出力
@@ -42,7 +43,7 @@
 
 ## 5. 初回実施項目（本番環境確定時の ToDo）
 
-- [ ] 監視プローブ（外部から `/health`）の設置
+- [ ] 監視プローブ（外部から `/ready`）の設置
 - [ ] メトリクス収集（Prometheus 等）またはログ集計の導入
 - [ ] 通知チャネルとエスカレーション連絡先の設定・通知試験
 - [ ] オンコール/一次対応責任者の指名

@@ -32,6 +32,26 @@ async def _read_response(reader: asyncio.StreamReader) -> str:
     return data.split(b"\0", 1)[0].decode("utf-8", errors="replace").strip()
 
 
+async def ping_clamd(timeout_seconds: float = 3) -> None:
+    """Raise when clamd is unavailable or returns an invalid PING response."""
+    reader, writer = await asyncio.wait_for(
+        asyncio.open_connection(settings.CLAMD_HOST, settings.CLAMD_PORT),
+        timeout=min(timeout_seconds, settings.CLAMD_TIMEOUT_SECONDS),
+    )
+    try:
+        writer.write(b"PING\n")
+        await writer.drain()
+        ping = await asyncio.wait_for(
+            _read_response(reader),
+            timeout=min(timeout_seconds, settings.CLAMD_TIMEOUT_SECONDS),
+        )
+        if ping != "PONG":
+            raise OSError(f"clamd PING failed: {ping!r}")
+    finally:
+        writer.close()
+        await writer.wait_closed()
+
+
 async def scan_bytes(data: bytes) -> ScanResult:
     """Scan in-memory bytes via clamd. Raises OSError when clamd is unavailable."""
     reader, writer = await asyncio.wait_for(

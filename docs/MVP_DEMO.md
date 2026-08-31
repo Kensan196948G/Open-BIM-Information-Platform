@@ -167,7 +167,8 @@ systemctl --user start open-bim-mvp-tunnel.service
 ```
 
 - 設定ファイル: `~/.config/systemd/user/open-bim-*.service`（本番は `.env.production`、MVP は `~/.config/open-bim/mvp.env` を EnvironmentFile で参照）
-- 障害時は `curl -f https://open-bim.mirai-dx-platform.com/health` で疎通確認し、
+- 障害時は`/health`でliveness、`curl -f https://open-bim.mirai-dx-platform.com/ready`で
+  DB/Redis/Storage/AVを含むreadinessを確認し、
   `journalctl --user -u open-bim-prod-*` で原因を確認してください。
 
 ---

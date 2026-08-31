@@ -43,6 +43,11 @@ def ensure_bucket_exists(bucket: str = settings.MINIO_BUCKET) -> None:
         client.create_bucket(Bucket=bucket)
 
 
+def check_storage(bucket: str = settings.MINIO_BUCKET) -> None:
+    """Raise when the configured bucket is not reachable."""
+    get_s3_client().head_bucket(Bucket=bucket)
+
+
 def _safe_ext(filename: str) -> str:
     """Return a sanitized, allowlisted extension (alphanumeric only, ≤10 chars)."""
     suffix = PurePosixPath(filename).suffix.lstrip(".")

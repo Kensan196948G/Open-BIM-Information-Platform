@@ -108,7 +108,8 @@ cp .env.production.example .env   # 強力な値に編集
 ### デプロイ後スモーク
 
 ```bash
-curl -f https://<domain>/health
+curl -f https://<domain>/health  # liveness
+curl -f https://<domain>/ready   # DB/Redis/Storage/AV release readiness
 curl -ksI https://<domain>/ | grep -i content-security-policy
 ```
 
@@ -139,10 +140,10 @@ DBマイグレーションのロールバックは `alembic downgrade -1`（`doc
 
 ```bash
 # cron / systemd timer で日次実行
-MONITOR_HEALTH_URL=https://<domain>/health ./scripts/monitor.sh
+MONITOR_READY_URL=https://<domain>/ready ./scripts/monitor.sh
 ```
 
-- 障害時の一次確認: `curl -f https://open-bim.mirai-dx-platform.com/health` →
+- 障害時の一次確認: `curl -f https://open-bim.mirai-dx-platform.com/ready` →
   失敗時は `systemctl --user status open-bim-*` と `journalctl --user -u open-bim-*` で確認
 
 - `docs/OPS_LEDGER.md` の日次/週次/月次/四半期項目を担当者へ割当
