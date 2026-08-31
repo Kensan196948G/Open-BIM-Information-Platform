@@ -15,11 +15,11 @@
     "ci_success_rate": 1,
     "ci_all_jobs_pass": true,
     "ci_jobs": 9,
-    "ci_last_run": "33362564280",
-    "ci_consecutive_success": 17,
+    "ci_last_run": "33369771843",
+    "ci_consecutive_success": 18,
     "test_pass_rate": 1,
-    "test_count": 376,
-    "backend_test_count": 333,
+    "test_count": 381,
+    "backend_test_count": 338,
     "frontend_test_count": 28,
     "e2e_test_count": 15,
     "lint_errors": 0,
@@ -96,7 +96,7 @@
     "codex_adversarial": "timeout_fallback_to_subagent",
     "internal_review": "completed",
     "adversarial_review": "completed (subagent)",
-    "findings_fixed": 15,
+    "findings_fixed": 17,
     "critical_high_open": 0
   },
   "quality": {
@@ -115,15 +115,15 @@
     "cto_decision_at": "2026-08-31",
     "ci_all_green": true,
     "ci_jobs": 9,
-    "ci_last_run": "33362564280",
+    "ci_last_run": "33369771843",
     "stable_achieved": false,
     "stable_consecutive_green": 5,
     "docs_complete": true,
     "e2e_live_backend": true,
     "performance_baseline": true,
     "remaining_for_production": [
-      "MinIO service復旧とDB metadata 8件に対応するobject integrity確認",
-      "MinIOを含む完全backupと隔離restore drill",
+      "MinIO service復旧と既存DB metadata 8件の業務扱い・object integrity確認（Human Gate）",
+      "MinIOを含む完全backupと隔離restore drill（実装・架空データ検証済み、運用承認待ち）",
       "health/readiness/download修正の公開反映後health check",
       "Redis/ClamAVのsystemd backend接続と監視通知先の確定",
       "Human sign-off (mandatory for production deploy)"
@@ -160,6 +160,7 @@
       "FastAPI HTTPBearer: get_current_user raises 401 credentials_exception — POST /api/v1/workflows without auth returns 401, not 403. Assert 401 in E2E tests.",
       "HTTP 200だけのhealth probeはSPA fallback HTMLを正常扱いする。livenessと、DB/Redis/Storage/AVを検証するrelease readinessを分離し、JSON契約まで検証する。",
       "DB-only backupのretentionをfull backupと共用すると、完全復旧点を失う。backup種別ごとに世代管理を分離する。",
+      "PostgreSQL backupはserver majorとpg_dump majorが不一致だと新しいSET文で復元不能になり得る。Backup前にmajorを照合し、同major toolchainを選択する。",
       "systemd host processとDocker dependencyを混在させる場合、loopback port・Credential・公開URLの到達性を個別に検証する。",
       "固定長S3 streamはSDK checksum検証がEOF後のempty readで発火し得る。最終chunkをlook-aheadで保留しないと、破損検知前にContent-Length全量をclientへ渡し得る。"
     ],
@@ -173,7 +174,9 @@
       "Local PostgreSQL backup/restoreはsource DBとpg_dump/restore imageのmajor versionを合わせ、--no-owner --no-acl と ON_ERROR_STOPを使う。",
       "mode 0600のTLS秘密鍵を非root containerから読む場合、権限を緩和せずnumeric runtime UIDをhost owner UIDへ一致させ、deploy preflightでfail-closedにする。",
       "S3 protocol SHA-256をDB checksumと開始前照合し、最終chunkを検証後に渡せば、新規objectの全量pre-bufferをなくせる。protocol checksumのないlegacy objectはworker間共有quota付き事前検証へfallbackする。",
-      "Python backend imageはdigest固定multi-stage、production dependencyのみ、非root/read-only/capability全dropとし、runtimeからpip/build toolを除去するとTrivy High/Criticalを27件から0件へ削減できる。"
+      "Python backend imageはdigest固定multi-stage、production dependencyのみ、非root/read-only/capability全dropとし、runtimeからpip/build toolを除去するとTrivy High/Criticalを27件から0件へ削減できる。",
+      "デモSeedはDB変更前にMinIO到達性を確認し、決定論的PDF/IFCをprotocol checksum付きで作る。Seed 2回後もDB/Object/SHAを一致させる。",
+      "Host PostgreSQL backupはserver majorを検出して同major pg_dumpを選択し、PG16.14+MinIO restore drill全SHA成功を確認する。"
     ],
     "usage_history": {
       "skills": {
