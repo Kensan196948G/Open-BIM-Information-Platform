@@ -108,6 +108,14 @@ def test_download_temp_request_limit_must_be_positive() -> None:
         Settings(_env_file=None, DOWNLOAD_TEMP_REQUEST_LIMIT_BYTES=0)
 
 
+def test_validation_errors_do_not_echo_secret_inputs() -> None:
+    secret = "must-not-appear-in-validation-output"
+    with pytest.raises(ValidationError) as exc_info:
+        Settings(_env_file=None, UNKNOWN_SECRET=secret)
+
+    assert secret not in str(exc_info.value)
+
+
 def test_self_registration_optional_in_development() -> None:
     settings = Settings(_env_file=None)
     assert settings.ALLOW_SELF_REGISTRATION is True

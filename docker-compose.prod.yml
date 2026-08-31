@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Production Compose — no data-tier ports on the host, no source mounts,
 # no --reload. Requires a filled-in .env and TLS certificates in ./certs/.
 #

@@ -24,8 +24,8 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install ruff mypy
-      - run: ruff check app tests
-      - run: ruff format --check app tests
+      - run: ruff check app tests ../scripts/seed_mvp.py
+      - run: ruff format --check app tests ../scripts/seed_mvp.py
       - name: mypy
         # Production code only; test files are covered by ruff + pytest.
         run: mypy app

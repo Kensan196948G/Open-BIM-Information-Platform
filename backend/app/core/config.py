@@ -16,7 +16,11 @@ WEAK_MINIO_CREDENTIALS = {"minioadmin", "minioadmin123", "change_me_in_productio
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        hide_input_in_errors=True,
+    )
 
     # App
     APP_NAME: str = "Open BIM Information Platform"

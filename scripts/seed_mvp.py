@@ -3,7 +3,12 @@
 
 Run after `alembic upgrade head` against the MVP PostgreSQL:
 
-    cd backend && DATABASE_URL=postgresql+asyncpg://... python ../scripts/seed_mvp.py
+    cd backend
+    export DATABASE_URL=postgresql+asyncpg://...
+    export MINIO_ENDPOINT=localhost:9000
+    export MINIO_ACCESS_KEY=...
+    export MINIO_SECRET_KEY=...
+    python ../scripts/seed_mvp.py
 
 What it creates (all values are FICTIONAL — no real persons/companies/addresses):
   - Orgs:     未来建設株式会社 (mirai-kensetsu) / おおぞら設計株式会社 (ozora-sekkei)
@@ -13,7 +18,7 @@ What it creates (all values are FICTIONAL — no real persons/companies/addresse
               Password for every demo user: DemoPass123!
   - Containers: WIP / Shared / Published / Archived in ISO-19650-ish identifiers
                 across document / drawing / model / ifc types and security levels
-  - Revisions + a few dummy files (checksum placeholders, no real payload)
+  - Revisions + small deterministic PDF/IFC files stored in MinIO
   - Approvals: one pending workflow per project (assigned to the reviewer)
                and one completed workflow (for history)
   - Notifications: assigned-approval notices for reviewers
@@ -32,7 +37,9 @@ import sys
 import uuid
 from datetime import UTC, date, datetime, timedelta
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend"))
+os.chdir(BACKEND_DIR)
+sys.path.insert(0, BACKEND_DIR)
 
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
@@ -70,6 +77,12 @@ from app.models.workflow import (  # noqa: E402
     WorkflowStatus,
 )
 from app.services.audit import record_audit  # noqa: E402
+from app.services.demo_seed import (  # noqa: E402
+    build_demo_object,
+    prune_stale_demo_objects,
+    upload_demo_object,
+)
+from app.services.storage import ensure_bucket_exists  # noqa: E402
 
 DEMO_PASSWORD = "DemoPass123!"
 ORG_SLUGS = ("mirai-kensetsu", "ozora-sekkei")
@@ -99,7 +112,9 @@ async def _wipe(org: Organization, db: AsyncSession) -> None:
         Approval.__table__.delete().where(Approval.workflow_id.in_(workflow_ids))
     )
     await db.execute(
-        ProjectMember.__table__.delete().where(ProjectMember.project_id.in_(project_ids))
+        ProjectMember.__table__.delete().where(
+            ProjectMember.project_id.in_(project_ids)
+        )
     )
     await db.execute(
         ContainerFile.__table__.delete().where(
@@ -141,7 +156,9 @@ async def _wipe(org: Organization, db: AsyncSession) -> None:
             ProjectNamingRule.project_id.in_(project_ids)
         )
     )
-    await db.execute(Project.__table__.delete().where(Project.organization_id == org.id))
+    await db.execute(
+        Project.__table__.delete().where(Project.organization_id == org.id)
+    )
     await db.execute(
         UserOrganization.__table__.delete().where(
             UserOrganization.organization_id == org.id
@@ -170,10 +187,17 @@ async def main() -> None:
         "DATABASE_URL",
         "postgresql+asyncpg://bim_user:bim_password@localhost:5432/bim_mvp",
     )
-    engine = create_async_engine(url)
-    Session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    # Fail before deleting any database rows if the matching object store is not
+    # reachable. A database-only seed would violate the backup integrity contract.
+    ensure_bucket_exists()
 
-    async with Session() as db:
+    engine = create_async_engine(url)
+    session_factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+    expected_demo_objects: set[str] = set()
+
+    async with session_factory() as db:
         # ─── 1. Organizations ───────────────────────────────────────────────────
         orgs: dict[str, Organization] = {}
         for slug, name, desc in (
@@ -236,18 +260,14 @@ async def main() -> None:
             await db.flush()
             return user
 
-        mirai_admin = await _user(
-            "admin@mirai.example.jp", "mirai-admin", "青木 大輔"
-        )
+        mirai_admin = await _user("admin@mirai.example.jp", "mirai-admin", "青木 大輔")
         mirai_reviewer = await _user(
             "reviewer@mirai.example.jp", "mirai-reviewer", "井上 美咲"
         )
         mirai_engineer = await _user(
             "engineer@mirai.example.jp", "mirai-engineer", "加藤 健一"
         )
-        ozora_chief = await _user(
-            "chief@ozora.example.jp", "ozora-chief", "小林 直樹"
-        )
+        ozora_chief = await _user("chief@ozora.example.jp", "ozora-chief", "小林 直樹")
         ozora_designer = await _user(
             "designer@ozora.example.jp", "ozora-designer", "高橋 さくら"
         )
@@ -297,7 +317,9 @@ async def main() -> None:
 
         # ─── 3. Projects ────────────────────────────────────────────────────────
         now = datetime.now(UTC)
-        project_specs: list[tuple[str, str, str, str, ProjectStatus, str, date, date]] = [
+        project_specs: list[
+            tuple[str, str, str, str, ProjectStatus, str, date, date]
+        ] = [
             (
                 "FUT-BR-2026",
                 "未来橋架替工事",
@@ -425,7 +447,15 @@ async def main() -> None:
                             "min_length": 2,
                             "max_length": 4,
                             "allowed_values": [
-                                "DR", "M3", "MO", "MS", "WD", "RP", "SK", "SP", "XX",
+                                "DR",
+                                "M3",
+                                "MO",
+                                "MS",
+                                "WD",
+                                "RP",
+                                "SK",
+                                "SP",
+                                "XX",
                             ],
                             "description": "Information type code",
                         },
@@ -649,9 +679,7 @@ async def main() -> None:
             project = projects[code]
             engineer, reviewer, admin = creators[code]
             for identifier, title, ctype, state, seclvl, rev, branch in specs:
-                created_by = (
-                    reviewer if state == ContainerState.shared else engineer
-                )
+                created_by = reviewer if state == ContainerState.shared else engineer
                 container = InformationContainer(
                     id=_uuid(),
                     project_id=project.id,
@@ -703,7 +731,7 @@ async def main() -> None:
                             comment="デモ用シード投入",
                         )
                     )
-                # Revisions + dummy files (published/shared containers)
+                # Revisions + real deterministic files (published/shared containers)
                 revision = ContainerRevision(
                     id=_uuid(),
                     container_id=container.id,
@@ -716,22 +744,23 @@ async def main() -> None:
                 db.add(revision)
                 await db.flush()
                 if state in (ContainerState.shared, ContainerState.published):
+                    demo_object = build_demo_object(
+                        project.code,
+                        identifier,
+                        is_ifc=ctype in (ContainerType.model, ContainerType.ifc),
+                    )
+                    upload_demo_object(demo_object)
+                    expected_demo_objects.add(demo_object.storage_key)
                     db.add(
                         ContainerFile(
                             id=_uuid(),
                             container_id=container.id,
                             revision_id=revision.id,
-                            original_filename=f"{identifier}.{'ifc' if ctype in (ContainerType.model, ContainerType.ifc) else 'pdf'}",
-                            storage_key=f"demo/{project.code}/{container.id}/{identifier}",
-                            content_type=(
-                                "application/octet-stream"
-                                if ctype in (ContainerType.model, ContainerType.ifc)
-                                else "application/pdf"
-                            ),
-                            file_size_bytes=2048,
-                            checksum_sha256=(
-                                "d" * 64
-                            ),  # placeholder checksum for demo rows
+                            original_filename=demo_object.original_filename,
+                            storage_key=demo_object.storage_key,
+                            content_type=demo_object.content_type,
+                            file_size_bytes=demo_object.size_bytes,
+                            checksum_sha256=demo_object.checksum_sha256,
                             uploaded_by=created_by.id,
                         )
                     )
@@ -740,12 +769,21 @@ async def main() -> None:
             # One pending approval (reviewer) + one completed approval each
             shared_container = None
             published_container = None
-            for c in (await db.execute(
-                select(InformationContainer).where(
-                    InformationContainer.project_id == project.id
+            for c in (
+                (
+                    await db.execute(
+                        select(InformationContainer).where(
+                            InformationContainer.project_id == project.id
+                        )
+                    )
                 )
-            )).scalars().all():
-                if c.current_state == ContainerState.shared and shared_container is None:
+                .scalars()
+                .all()
+            ):
+                if (
+                    c.current_state == ContainerState.shared
+                    and shared_container is None
+                ):
                     shared_container = c
                 if (
                     c.current_state == ContainerState.published
@@ -849,8 +887,11 @@ async def main() -> None:
             "users": len(existing_users) + 1,
             "containers": sum(len(v) for v in container_specs.values()),
         }
+        removed_objects = prune_stale_demo_objects(expected_demo_objects)
         print(
             f"✅ MVP seed complete: {counts} | "
+            f"demo_files={len(expected_demo_objects)} "
+            f"stale_objects_removed={len(removed_objects)} | "
             f"login demo users with password '{DEMO_PASSWORD}' "
             f"(admin@mirai.example.jp / reviewer@mirai.example.jp / "
             f"engineer@mirai.example.jp / chief@ozora.example.jp / "

@@ -1,7 +1,5 @@
 # Demo mode: frontend only (no backend/DB required)
 # Usage: docker compose -f docker-compose.demo.yml up -d
-version: "3.9"
-
 services:
   frontend-demo:
     build:

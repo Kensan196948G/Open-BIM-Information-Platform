@@ -36,20 +36,19 @@ neonctl connection-string --project-id <project-id> --branch main --role bim_use
 
 ### バックアップ（Tunnel/ホスト PostgreSQL 構成時）
 
-`scripts/backup.sh` は docker 構成（bim_postgres コンテナ）向けのため、ホスト PostgreSQL で
-運用している間は以下の手順で日次バックアップする（`BACKUP_ENCRYPTION_KEY` は `.env.production` を source）：
+`scripts/backup.sh`の`host` modeで、systemd backendと同じLocal PostgreSQL / MinIOを一つの
+暗号化復旧点として取得する。実行前に書込みを停止し、対象Endpointを確認する。
 
 ```bash
 set -a; source .env.production; set +a
-TS=$(date +%Y%m%d-%H%M%S); TMP=$(mktemp -d)
-PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h 127.0.0.1 -U "$POSTGRES_USER" -d bim_prod | gzip > "$TMP/bim_prod.sql.gz"
-PGPASSWORD=bim_password pg_dump -h 127.0.0.1 -U bim_user -d bim_mvp | gzip > "$TMP/bim_mvp.sql.gz"
-tar -czf - -C "$TMP" . | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_ENCRYPTION_KEY > "backups/backup-$TS.tar.gz.enc"
-rm -rf "$TMP"   # 世代管理: 7 日より古い backup-*.tar.gz.enc を削除
+POSTGRES_BACKUP_MODE=host \
+MINIO_BACKUP_MODE=host \
+BACKUP_MAINTENANCE_CONFIRMED=true \
+./scripts/backup.sh
 ```
 
-復元は `openssl enc -d ... | tar -xzO ./bim_<env>.sql.gz | gunzip | psql ...` で実施
-（2026-08-18 に分離コンテナへの復元演習済み: users=6 / containers=11 / projects=3）。
+Scriptはsource PostgreSQL majorと`pg_dump` majorを一致させ、DB全`storage_key`とMinIO Object数を
+暗号化前に照合する。復元は`restore-drill.sh`で同major PostgreSQL + MinIOの隔離環境へ行う。
 
 ## 3. GitHub Secrets 設定
 

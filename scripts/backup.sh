@@ -37,6 +37,8 @@ RETENTION_DAYS="${RETENTION_DAYS:-7}"
 NETWORK_NAME="${NETWORK_NAME:-bim_platform_net}"
 POSTGRES_BACKUP_MODE="${POSTGRES_BACKUP_MODE:-compose}"
 MINIO_BACKUP_MODE="${MINIO_BACKUP_MODE:-compose}"
+PG_DUMP_BIN_EXPLICIT=false
+if [[ -n "${PG_DUMP_BIN+x}" ]]; then PG_DUMP_BIN_EXPLICIT=true; fi
 PG_DUMP_BIN="${PG_DUMP_BIN:-pg_dump}"
 PSQL_BIN="${PSQL_BIN:-psql}"
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
@@ -71,6 +73,38 @@ case "$POSTGRES_BACKUP_MODE" in
       | gzip > "$TMP_DIR/postgres.sql.gz"
     ;;
   host)
+    SERVER_VERSION_NUM=$(PGPASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}" \
+      "$PSQL_BIN" --no-psqlrc --tuples-only --no-align \
+        --host "${POSTGRES_HOST:-127.0.0.1}" \
+        --port "${POSTGRES_PORT:-5432}" \
+        --username "${POSTGRES_USER:-bim_user}" \
+        --dbname "${POSTGRES_DB:-bim_platform}" \
+        --command "SHOW server_version_num")
+    [[ "$SERVER_VERSION_NUM" =~ ^[0-9]+$ ]] || {
+      echo "❌ PostgreSQL server versionを取得できません: $SERVER_VERSION_NUM" >&2
+      exit 1
+    }
+    SERVER_MAJOR=$((SERVER_VERSION_NUM / 10000))
+    DUMP_MAJOR=$("$PG_DUMP_BIN" --version | sed -E 's/.* ([0-9]+)(\.[0-9]+)?.*/\1/')
+    if [[ "$DUMP_MAJOR" != "$SERVER_MAJOR" ]]; then
+      if [[ "$PG_DUMP_BIN_EXPLICIT" == "true" ]]; then
+        echo "❌ PG_DUMP_BIN major $DUMP_MAJOR はserver major $SERVER_MAJORと一致しません" >&2
+        exit 1
+      fi
+      MATCHING_PG_DUMP="/usr/lib/postgresql/$SERVER_MAJOR/bin/pg_dump"
+      if [[ ! -x "$MATCHING_PG_DUMP" ]]; then
+        echo "❌ PostgreSQL $SERVER_MAJOR用pg_dumpがありません: $MATCHING_PG_DUMP" >&2
+        echo "   PG_DUMP_BINでserverと同じmajorのbinaryを指定してください" >&2
+        exit 1
+      fi
+      PG_DUMP_BIN="$MATCHING_PG_DUMP"
+      DUMP_MAJOR=$("$PG_DUMP_BIN" --version | sed -E 's/.* ([0-9]+)(\.[0-9]+)?.*/\1/')
+    fi
+    [[ "$DUMP_MAJOR" == "$SERVER_MAJOR" ]] || {
+      echo "❌ pg_dump/server major一致を確認できません" >&2
+      exit 1
+    }
+    echo "    PostgreSQL toolchain: server=$SERVER_MAJOR pg_dump=$DUMP_MAJOR ($PG_DUMP_BIN)"
     PGPASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}" \
       "$PG_DUMP_BIN" --no-owner --no-acl \
         --host "${POSTGRES_HOST:-127.0.0.1}" \

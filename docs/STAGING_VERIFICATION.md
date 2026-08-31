@@ -82,3 +82,15 @@
   capability 0、`NoNewPrivs=1`、read-only rootfs、runtime pip/test dependencyなしを実測
 - backend image Trivy High/Criticalは変更前OS 24/Python 3から変更後0、
   Dockerfile misconfiguration 0へ改善
+
+## 2026-08-31 Seed / Full Backup整合追試
+
+- 旧`seed_mvp.py`がDBにplaceholder checksum 7件だけを作り、MinIO payloadを作らないRoot Causeを特定
+- Seedを実PDF 6件・最小IFC 1件の決定論的Objectへ変更し、MinIO未到達時はDB変更前に失敗
+- 使い捨てPostgreSQL 16.14 + 固定MinIOでMigration後にSeedを2回実行し、DB 7件 / Object 7件、
+  Size・SHA-256・S3 protocol checksum全件一致を確認
+- Hostの既定`pg_dump 17`とsource PostgreSQL 16の不一致を検知し、同major `pg_dump 16`を
+  自動選択するよう`backup.sh`を修正
+- 7 Objectを含む暗号化Full Backupを作成し、隔離PostgreSQL 16.14 + MinIOへ復元。
+  projects=3 / containers=11 / files=7 / immutable trigger / 全7 SHA-256一致、17秒で成功
+- 公開DBの既存placeholder 7行は変更していない。実環境修復・Full BackupはHuman Gateを維持

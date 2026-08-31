@@ -38,10 +38,16 @@ python -m alembic upgrade head
 
 ```bash
 # 組織2・プロジェクト3・ユーザー8・コンテナ11・承認/通知/要求文書を投入
+export MINIO_ENDPOINT="localhost:9000"
+export MINIO_ACCESS_KEY="minioadmin"
+export MINIO_SECRET_KEY="<ローカルMinIOのSecret>"
 python ../scripts/seed_mvp.py
 ```
 
-> 再実行しても安全（冪等）。既存デモユーザーは再利用され、パスワードは毎回 `DemoPass123!` にリセットされます。
+> SeedはDBを変更する前にMinIO到達性を確認し、Shared/Published Container用の小さな
+> PDF/IFC 7件をS3 SHA-256付きで保存する。MinIO未到達時はDBを変更せず失敗する。
+> 再実行しても安定した`demo/` Keyを上書きし、同Prefixの古いSeed Objectだけを整理する。
+> 既存デモユーザーは再利用され、パスワードは毎回 `DemoPass123!` にリセットされる。
 
 ### 3. バックエンド起動
 
@@ -118,6 +124,7 @@ IP単位rate limitを適用するため、実在利用者や本番データに�
 | プロジェクト | 3 | 未来橋架替工事 / 臨海部護岸整備工事 / 宮ヶ丘複合開発計画 |
 | ユーザー | 7 | 各ロール + プラットフォーム管理者 |
 | コンテナ | 11 | WIP/Shared/Published/Archived を網羅（図面・モデル・文書） |
+| ファイル | 7 | 実MinIO Object（PDF 6件・IFC 1件、DBとSize/SHA-256一致） |
 | 承認ワークフロー | 各プロジェクトに承認待ち1件 + 完了1件 |
 | 通知 | 承認依頼（未読）をレビューアへ |
 | 要求文書 | EIR（承認済み）・BEP（レビュー中）+ 要求項目 |
