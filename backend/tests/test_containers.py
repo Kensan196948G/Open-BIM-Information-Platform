@@ -759,3 +759,202 @@ async def test_platform_admin_can_get_container_without_membership(
     )
     assert res.status_code == 200
     assert res.json()["id"] == container_id
+
+
+# ─── Revision diff (Issue #52) ────────────────────────────────────────────────
+
+
+async def _create_revision_with_file(
+    container_id: str,
+    user_id: str,
+    revision_code: str = "P01",
+    version_code: str | None = "P01.01",
+    change_reason: str | None = None,
+    change_summary: str | None = None,
+    original_filename: str = "drawing.pdf",
+    content_type: str = "application/pdf",
+    file_size_bytes: int = 1024,
+    checksum_sha256: str = "a" * 64,
+) -> str:
+    """Directly insert a ContainerRevision linked to a ContainerFile. Returns revision_id."""
+    from app.models.container import ContainerFile, ContainerRevision
+    from tests.conftest import TestSessionLocal
+
+    async with TestSessionLocal() as session:
+        revision = ContainerRevision(
+            container_id=container_id,
+            revision_code=revision_code,
+            version_code=version_code,
+            change_reason=change_reason,
+            change_summary=change_summary,
+            created_by=user_id,
+        )
+        session.add(revision)
+        await session.flush()
+        container_file = ContainerFile(
+            container_id=container_id,
+            revision_id=revision.id,
+            original_filename=original_filename,
+            storage_key=f"test/{uuid.uuid4()}",
+            content_type=content_type,
+            file_size_bytes=file_size_bytes,
+            checksum_sha256=checksum_sha256,
+            uploaded_by=user_id,
+        )
+        session.add(container_file)
+        await session.flush()
+        revision.file_id = container_file.id
+        await session.commit()
+        revision_id = revision.id
+    return revision_id
+
+
+@pytest.mark.asyncio
+async def test_diff_revisions_detects_text_and_file_changes(client: AsyncClient):
+    """Diff surfaces text-field changes and reports the file as non-identical."""
+    token, proj_id, user_id = await _setup(client, "diff1")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+
+    rev1 = await _create_revision_with_file(
+        container_id,
+        user_id,
+        revision_code="P01",
+        version_code="P01.01",
+        change_reason="Initial issue",
+        change_summary="First draft",
+        checksum_sha256="a" * 64,
+    )
+    rev2 = await _create_revision_with_file(
+        container_id,
+        user_id,
+        revision_code="P02",
+        version_code="P02.01",
+        change_reason="Client comments addressed",
+        change_summary="Revised layout",
+        checksum_sha256="b" * 64,
+    )
+
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/revisions/diff",
+        params={"from_revision_id": rev1, "to_revision_id": rev2},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["container_id"] == container_id
+    assert data["from_revision"]["id"] == rev1
+    assert data["to_revision"]["id"] == rev2
+
+    by_field = {d["field"]: d for d in data["text_diffs"]}
+    assert by_field["revision_code"]["changed"] is True
+    assert by_field["revision_code"]["from_value"] == "P01"
+    assert by_field["revision_code"]["to_value"] == "P02"
+    assert by_field["change_reason"]["changed"] is True
+    assert len(by_field["change_reason"]["diff_lines"]) > 0
+
+    assert data["file_diff"]["checksum_sha256_changed"] is True
+    assert data["file_diff"]["identical"] is False
+
+
+@pytest.mark.asyncio
+async def test_diff_revisions_file_identical(client: AsyncClient):
+    """When both revisions reference the same file metadata, file_diff.identical is True."""
+    token, proj_id, user_id = await _setup(client, "diff2")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+
+    shared_kwargs = {
+        "original_filename": "model.ifc",
+        "content_type": "model/ifc",
+        "file_size_bytes": 2048,
+        "checksum_sha256": "c" * 64,
+    }
+    rev1 = await _create_revision_with_file(
+        container_id,
+        user_id,
+        revision_code="P01",
+        version_code="P01.01",
+        change_reason="No change",
+        **shared_kwargs,
+    )
+    rev2 = await _create_revision_with_file(
+        container_id,
+        user_id,
+        revision_code="P01",
+        version_code="P01.02",
+        change_reason="No change",
+        **shared_kwargs,
+    )
+
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/revisions/diff",
+        params={"from_revision_id": rev1, "to_revision_id": rev2},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["file_diff"]["identical"] is True
+    assert data["file_diff"]["checksum_sha256_changed"] is False
+    assert data["file_diff"]["original_filename_changed"] is False
+
+
+@pytest.mark.asyncio
+async def test_diff_revisions_foreign_revision_returns_404(client: AsyncClient):
+    """A revision belonging to another container must not be diffable — 404."""
+    token, proj_id, user_id = await _setup(client, "diff3")
+    container_a = (await _create_container(client, token, proj_id)).json()["id"]
+    container_b = (
+        await _create_container(
+            client, token, proj_id, identifier="PROJ-ORG-ZZ-GF-DR-AR-9002"
+        )
+    ).json()["id"]
+
+    rev_a = await _create_revision_with_file(container_a, user_id)
+    rev_b = await _create_revision_with_file(container_b, user_id)
+
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{container_a}/revisions/diff",
+        params={"from_revision_id": rev_a, "to_revision_id": rev_b},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_diff_revisions_requires_permission(client: AsyncClient):
+    """A member without container.read permission (unknown role) is denied — 403."""
+    org_id, proj_id = await _setup_org_project()
+    token, user_id = await _register_and_login(client, "diff4@example.com", "diff4user")
+    # "guest" is not a recognized role: it resolves to an empty permission set.
+    await _add_membership(user_id, org_id, role="guest")
+
+    # Container + revisions are created directly to isolate the permission check
+    # from container creation (which itself requires container.create).
+    admin_token, admin_id = await _register_and_login(
+        client, "diff4admin@example.com", "diff4admin"
+    )
+    await _add_membership(admin_id, org_id)
+    container_id = (await _create_container(client, admin_token, proj_id)).json()["id"]
+    rev1 = await _create_revision_with_file(container_id, admin_id)
+    rev2 = await _create_revision_with_file(container_id, admin_id)
+
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/revisions/diff",
+        params={"from_revision_id": rev1, "to_revision_id": rev2},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_diff_revisions_requires_auth(client: AsyncClient):
+    """GET .../revisions/diff without auth returns 401."""
+    token, proj_id, user_id = await _setup(client, "diff5")
+    container_id = (await _create_container(client, token, proj_id)).json()["id"]
+    rev1 = await _create_revision_with_file(container_id, user_id)
+    rev2 = await _create_revision_with_file(container_id, user_id)
+
+    res = await client.get(
+        f"/api/v1/projects/{proj_id}/containers/{container_id}/revisions/diff",
+        params={"from_revision_id": rev1, "to_revision_id": rev2},
+    )
+    assert res.status_code == 401
