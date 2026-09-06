@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from enum import Enum
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -24,7 +24,8 @@ from app.models.workflow import (
     WorkflowTask,
 )
 from app.services.audit import enum_value, record_audit
-from app.services.notifications import notify_user
+from app.services.mail import send_mail_safe
+from app.services.notifications import get_user_email, notify_user
 from app.services.rbac import P_WORKFLOW_START, require_permission
 
 router = APIRouter(prefix="/workflows", tags=["workflows"])
@@ -221,6 +222,7 @@ async def start_workflow(
     body: WorkflowStartRequest,
     current_user: CurrentUser,
     db: DB,
+    background_tasks: BackgroundTasks,
 ) -> WorkflowResponse:
     project = await _require_project_member(body.project_id, current_user, db)
     await require_permission(
@@ -264,14 +266,27 @@ async def start_workflow(
         )
         db.add(task)
         db.add(approval)
+        notif_title = "承認依頼が届きました"
+        notif_body = (
+            f"「{body.workflow_type}」の承認依頼です。"
+            f"コメント: {body.comment or 'なし'}"
+        )
         notify_user(
             db,
             user_id=assignee_id,
             event_type="workflow.assigned",
-            title="承認依頼が届きました",
-            body=f"「{body.workflow_type}」の承認依頼です。コメント: {body.comment or 'なし'}",
+            title=notif_title,
+            body=notif_body,
             link=f"/approvals?workflow={workflow.id}",
         )
+        to_email = await get_user_email(db, assignee_id)
+        if to_email:
+            background_tasks.add_task(
+                send_mail_safe,
+                to_email=to_email,
+                subject=notif_title,
+                body=notif_body,
+            )
 
     record_audit(
         db,
@@ -320,6 +335,7 @@ async def act_on_approval(
     body: ApprovalActRequest,
     current_user: CurrentUser,
     db: DB,
+    background_tasks: BackgroundTasks,
 ) -> ApprovalResponse:
     # Lock ordering: parent WorkflowInstance FIRST, then Approval, then Container.
     # Locking the parent serializes ALL approvers of the same workflow, so the
@@ -406,17 +422,26 @@ async def act_on_approval(
     elif all_approved:
         workflow.status = WorkflowStatus.completed
 
+    notif_title = "承認結果の通知"
+    notif_body = (
+        f"承認結果: {enum_value(workflow.status)} （{body.comment or 'コメントなし'}）"
+    )
     notify_user(
         db,
         user_id=workflow.initiated_by,
         event_type="workflow.result",
-        title="承認結果の通知",
-        body=(
-            f"承認結果: {enum_value(workflow.status)} "
-            f"（{body.comment or 'コメントなし'}）"
-        ),
+        title=notif_title,
+        body=notif_body,
         link=f"/approvals?workflow={workflow.id}",
     )
+    to_email = await get_user_email(db, workflow.initiated_by)
+    if to_email:
+        background_tasks.add_task(
+            send_mail_safe,
+            to_email=to_email,
+            subject=notif_title,
+            body=notif_body,
+        )
 
     record_audit(
         db,
