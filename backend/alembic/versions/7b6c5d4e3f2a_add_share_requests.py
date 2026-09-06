@@ -39,10 +39,12 @@ def _uuid(seed: str) -> str:
 
 
 def upgrade() -> None:
-    op.execute(
-        "CREATE TYPE sharerequeststatus AS ENUM "
-        "('pending', 'approved', 'rejected', 'revoked', 'expired');"
-    )
+    # Note: the ENUM type is created automatically as part of op.create_table
+    # below (matching the pattern used for workflowstatus/approvalresult in
+    # 46aeadb1d6d7_initial_schema.py) — do NOT also pre-create it via a
+    # standalone `CREATE TYPE` statement, since embedding a plain sa.Enum
+    # column in create_table already emits the CREATE TYPE DDL and a second,
+    # manual one raises DuplicateObjectError on Postgres.
     op.create_table(
         "share_requests",
         sa.Column("container_id", sa.String(length=36), nullable=False),
@@ -58,7 +60,6 @@ def upgrade() -> None:
                 "revoked",
                 "expired",
                 name="sharerequeststatus",
-                create_type=False,
             ),
             nullable=False,
         ),
