@@ -376,3 +376,109 @@ async def test_get_items_unknown_doc_returns_404(client: AsyncClient):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert res.status_code == 404
+
+
+# ─── Milestone (due_date / milestone_name) ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_create_requirement_item_with_milestone(client: AsyncClient):
+    """Create item with due_date/milestone_name — returns them in response."""
+    token, user_id = await _register_login(client, "rq11@example.com", "rquser11")
+    org_id, project_id = await _setup_org_project()
+    await _add_membership(user_id, org_id)
+
+    headers = {"Authorization": f"Bearer {token}"}
+    doc_res = await client.post(
+        f"/api/v1/projects/{project_id}/requirements",
+        json={"doc_type": "EIR", "title": "EIR"},
+        headers=headers,
+    )
+    doc_id = doc_res.json()["id"]
+
+    item_res = await client.post(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}/items",
+        json={
+            "item_no": "EIR-010",
+            "what": "Submit federated model for Stage 4",
+            "due_date": "2026-12-01",
+            "milestone_name": "Stage 4 - Technical Design",
+        },
+        headers=headers,
+    )
+    assert item_res.status_code == 201, item_res.text
+    data = item_res.json()
+    assert data["due_date"] == "2026-12-01"
+    assert data["milestone_name"] == "Stage 4 - Technical Design"
+
+    get_res = await client.get(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}/items",
+        headers=headers,
+    )
+    assert get_res.status_code == 200
+    fetched = get_res.json()[0]
+    assert fetched["due_date"] == "2026-12-01"
+    assert fetched["milestone_name"] == "Stage 4 - Technical Design"
+
+
+@pytest.mark.asyncio
+async def test_create_requirement_item_without_milestone_defaults_null(
+    client: AsyncClient,
+):
+    """Create item without due_date/milestone_name — fields default to null."""
+    token, user_id = await _register_login(client, "rq12@example.com", "rquser12")
+    org_id, project_id = await _setup_org_project()
+    await _add_membership(user_id, org_id)
+
+    headers = {"Authorization": f"Bearer {token}"}
+    doc_res = await client.post(
+        f"/api/v1/projects/{project_id}/requirements",
+        json={"doc_type": "BEP", "title": "BEP"},
+        headers=headers,
+    )
+    doc_id = doc_res.json()["id"]
+
+    item_res = await client.post(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}/items",
+        json={"item_no": "BEP-010", "what": "No milestone set yet"},
+        headers=headers,
+    )
+    assert item_res.status_code == 201
+    data = item_res.json()
+    assert data["due_date"] is None
+    assert data["milestone_name"] is None
+
+
+@pytest.mark.asyncio
+async def test_update_requirement_item_milestone(client: AsyncClient):
+    """PATCH updates due_date/milestone_name on an existing item."""
+    token, user_id = await _register_login(client, "rq13@example.com", "rquser13")
+    org_id, project_id = await _setup_org_project()
+    await _add_membership(user_id, org_id)
+
+    headers = {"Authorization": f"Bearer {token}"}
+    doc_res = await client.post(
+        f"/api/v1/projects/{project_id}/requirements",
+        json={"doc_type": "MIDP", "title": "MIDP"},
+        headers=headers,
+    )
+    doc_id = doc_res.json()["id"]
+    item_res = await client.post(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}/items",
+        json={"item_no": "MIDP-001", "what": "Initial deliverable"},
+        headers=headers,
+    )
+    item_id = item_res.json()["id"]
+
+    upd = await client.patch(
+        f"/api/v1/projects/{project_id}/requirements/{doc_id}/items/{item_id}",
+        json={
+            "due_date": "2027-03-15",
+            "milestone_name": "Stage 5 - Construction",
+        },
+        headers=headers,
+    )
+    assert upd.status_code == 200, upd.text
+    data = upd.json()
+    assert data["due_date"] == "2027-03-15"
+    assert data["milestone_name"] == "Stage 5 - Construction"

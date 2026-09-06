@@ -1,5 +1,9 @@
 import { api } from "@/lib/api";
-import type { ContainerFile, InformationContainer, PaginatedResponse } from "@/types";
+import type {
+  ContainerFile,
+  InformationContainer,
+  PaginatedResponse,
+} from "@/types";
 
 export async function listFiles(
   projectId: string,
@@ -16,7 +20,9 @@ export async function deleteFile(
   containerId: string,
   fileId: string,
 ): Promise<void> {
-  await api.delete(`/projects/${projectId}/containers/${containerId}/files/${fileId}`);
+  await api.delete(
+    `/projects/${projectId}/containers/${containerId}/files/${fileId}`,
+  );
 }
 
 export async function getDownloadUrl(
@@ -63,6 +69,71 @@ export async function listContainerRevisions(
 ): Promise<ContainerRevisionItem[]> {
   const res = await api.get<ContainerRevisionItem[]>(
     `/projects/${projectId}/containers/${containerId}/revisions`,
+  );
+  return res.data;
+}
+
+// ─── Revision diff (Issue #52) ─────────────────────────────────────────────
+
+export interface RevisionDiffFileMeta {
+  id: string | null;
+  original_filename: string | null;
+  content_type: string | null;
+  file_size_bytes: number | null;
+  checksum_sha256: string | null;
+}
+
+export interface RevisionDiffTextField {
+  field: string;
+  from_value: string | null;
+  to_value: string | null;
+  changed: boolean;
+  diff_lines: string[];
+}
+
+export interface RevisionDiffFileComparison {
+  from_file: RevisionDiffFileMeta | null;
+  to_file: RevisionDiffFileMeta | null;
+  original_filename_changed: boolean;
+  content_type_changed: boolean;
+  file_size_bytes_changed: boolean;
+  checksum_sha256_changed: boolean;
+  identical: boolean;
+}
+
+export interface RevisionDiffSummary {
+  id: string;
+  revision_code: string;
+  version_code: string | null;
+  change_reason: string | null;
+  change_summary: string | null;
+  created_by: string;
+  created_at: string;
+  file: RevisionDiffFileMeta | null;
+}
+
+export interface RevisionDiffResponse {
+  container_id: string;
+  from_revision: RevisionDiffSummary;
+  to_revision: RevisionDiffSummary;
+  text_diffs: RevisionDiffTextField[];
+  file_diff: RevisionDiffFileComparison;
+}
+
+export async function getContainerRevisionDiff(
+  projectId: string,
+  containerId: string,
+  fromRevisionId: string,
+  toRevisionId: string,
+): Promise<RevisionDiffResponse> {
+  const res = await api.get<RevisionDiffResponse>(
+    `/projects/${projectId}/containers/${containerId}/revisions/diff`,
+    {
+      params: {
+        from_revision_id: fromRevisionId,
+        to_revision_id: toRevisionId,
+      },
+    },
   );
   return res.data;
 }

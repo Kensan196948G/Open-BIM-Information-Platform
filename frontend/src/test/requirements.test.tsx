@@ -39,6 +39,8 @@ const EIR_DOC: RequirementsDocument = {
       responsible_user_id: null,
       status: "met",
       notes: null,
+      due_date: null,
+      milestone_name: null,
     },
     {
       id: "item-2",
@@ -52,6 +54,8 @@ const EIR_DOC: RequirementsDocument = {
       responsible_user_id: null,
       status: "partial",
       notes: null,
+      due_date: "2020-01-01",
+      milestone_name: "Stage 6 - Handover",
     },
   ],
 };
@@ -166,6 +170,20 @@ describe("RequirementsPage", () => {
     });
   });
 
+  it("納期超過かつ未充足の要件には遅延バッジが表示される", async () => {
+    const user = userEvent.setup();
+    wrap(<RequirementsPage />);
+
+    const docBtn = (await screen.findAllByText("雇用主情報要件"))[0];
+    await user.click(docBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("遅延")).toBeInTheDocument();
+      expect(screen.getByText("Stage 6 - Handover")).toBeInTheDocument();
+      expect(screen.getByText("2020-01-01")).toBeInTheDocument();
+    });
+  });
+
   it("要件なし文書では「要求事項がありません」と表示される", async () => {
     const user = userEvent.setup();
     wrap(<RequirementsPage />);
@@ -193,7 +211,10 @@ describe("RequirementsPage", () => {
     await user.click(await screen.findByText("作成"));
 
     await waitFor(() => {
-      expect(createSpy).toHaveBeenCalledWith("proj-1", expect.objectContaining({ title: "新規EIR" }));
+      expect(createSpy).toHaveBeenCalledWith(
+        "proj-1",
+        expect.objectContaining({ title: "新規EIR" }),
+      );
     });
   });
 
@@ -213,13 +234,17 @@ describe("RequirementsPage", () => {
         responsible_user_id: null,
         status: "not_met",
         notes: null,
+        due_date: null,
+        milestone_name: null,
       });
     wrap(<RequirementsPage />);
 
     await user.click(await screen.findByText("BIM 実行計画"));
     await user.click(await screen.findByText("要件を追加"));
     await user.type(
-      await screen.findByText("何を（必須）").then((label) => label.nextElementSibling as HTMLTextAreaElement),
+      await screen
+        .findByText("何を（必須）")
+        .then((label) => label.nextElementSibling as HTMLTextAreaElement),
       "追加要件",
     );
     await user.click(await screen.findByText("追加"));

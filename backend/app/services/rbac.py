@@ -38,6 +38,7 @@ P_NAMING_RULE_MANAGE = "naming_rule.manage"
 P_REQUIREMENTS_READ = "requirements.read"
 P_REQUIREMENTS_MANAGE = "requirements.manage"
 P_SHARE_REQUEST_MANAGE = "share_request.manage"
+P_REPORTS_READ = "reports.read"
 
 
 ALL_PERMISSIONS: dict[str, tuple[str, str]] = {
@@ -59,6 +60,7 @@ ALL_PERMISSIONS: dict[str, tuple[str, str]] = {
     P_REQUIREMENTS_READ: ("requirements", "要求文書の閲覧"),
     P_REQUIREMENTS_MANAGE: ("requirements", "要求文書の管理"),
     P_SHARE_REQUEST_MANAGE: ("share_request", "外部共有申請の承認・却下・失効"),
+    P_REPORTS_READ: ("reports", "監査・コンプライアンスレポートの閲覧"),
 }
 
 
@@ -84,6 +86,7 @@ REVIEWER_PERMISSIONS = MEMBER_PERMISSIONS | frozenset(
         P_CONTAINER_ARCHIVE,
         P_WORKFLOW_ACT,
         P_SHARE_REQUEST_MANAGE,
+        P_REPORTS_READ,
     }
 )
 

@@ -23,6 +23,7 @@ import {
   LayoutDashboard,
   LogOut,
   Moon,
+  ScrollText,
   Search,
   Settings,
   Settings2,
@@ -82,6 +83,12 @@ const navGroups = [
         to: "/audit-logs",
         icon: ClipboardList,
         label: "監査ログ",
+      },
+      {
+        id: "reports",
+        to: "/reports",
+        icon: ScrollText,
+        label: "コンプライアンスレポート",
       },
       { id: "settings", to: "/settings", icon: Settings, label: "設定" },
       {
@@ -307,7 +314,9 @@ export default function Layout() {
         >
           <div className="min-w-0 flex-1 text-[13px]">
             <span style={{ color: "var(--text-3)" }}>
-              {activeProject ? `${activeProject.code} · ${activeProject.name}` : "BIM 情報基盤"}
+              {activeProject
+                ? `${activeProject.code} · ${activeProject.name}`
+                : "BIM 情報基盤"}
             </span>
             <span className="mx-2" style={{ color: "var(--text-3)" }}>
               /
@@ -352,7 +361,8 @@ export default function Layout() {
           >
             <Bell className="h-4 w-4" />
             {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
+              <span
+                className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
                 style={{ background: "var(--danger, #dc2626)" }}
               >
                 {unreadCount > 99 ? "99+" : unreadCount}

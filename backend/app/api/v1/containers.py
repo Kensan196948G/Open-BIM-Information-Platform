@@ -1,7 +1,8 @@
+import difflib
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 
 from app.core.deps import DB, CurrentUser
@@ -20,20 +21,27 @@ from app.schemas.container import (
     ContainerListResponse,
     ContainerResponse,
     ContainerUpdate,
+    RevisionDiffFileComparison,
+    RevisionDiffFileMeta,
+    RevisionDiffResponse,
+    RevisionDiffSummary,
+    RevisionDiffTextField,
     StateTransitionRequest,
 )
 from app.services.audit import enum_value, record_audit
+from app.services.mail import send_mail_safe
 from app.services.naming_validator import (
     NamingRule,
     SegmentDefinition,
     _default_iso19650_rule,
     validate_identifier,
 )
-from app.services.notifications import notify_user
+from app.services.notifications import get_user_email, notify_user
 from app.services.rbac import (
     P_CONTAINER_APPROVE,
     P_CONTAINER_ARCHIVE,
     P_CONTAINER_CREATE,
+    P_CONTAINER_READ,
     P_CONTAINER_RETURN,
     P_CONTAINER_REVISE,
     P_CONTAINER_SUBMIT,
@@ -293,6 +301,170 @@ async def list_container_revisions(
     ]
 
 
+def _text_diff_field(
+    field: str, from_value: str | None, to_value: str | None
+) -> RevisionDiffTextField:
+    """Build a before/after comparison for a text field, with a line-level diff."""
+    changed = (from_value or "") != (to_value or "")
+    diff_lines: list[str] = []
+    if changed:
+        from_lines = (from_value or "").splitlines()
+        to_lines = (to_value or "").splitlines()
+        diff_lines = list(
+            difflib.unified_diff(
+                from_lines,
+                to_lines,
+                fromfile="from_revision",
+                tofile="to_revision",
+                lineterm="",
+            )
+        )
+    return RevisionDiffTextField(
+        field=field,
+        from_value=from_value,
+        to_value=to_value,
+        changed=changed,
+        diff_lines=diff_lines,
+    )
+
+
+def _file_meta(file: ContainerFile | None) -> RevisionDiffFileMeta | None:
+    if file is None:
+        return None
+    return RevisionDiffFileMeta(
+        id=file.id,
+        original_filename=file.original_filename,
+        content_type=file.content_type,
+        file_size_bytes=file.file_size_bytes,
+        checksum_sha256=file.checksum_sha256,
+    )
+
+
+async def _load_revision_or_404(
+    container_id: str, revision_id: str, db
+) -> tuple[ContainerRevision, ContainerFile | None]:
+    """Return (revision, file) for a revision that belongs to container_id, or 404."""
+    result = await db.execute(
+        select(ContainerRevision, ContainerFile)
+        .outerjoin(ContainerFile, ContainerFile.revision_id == ContainerRevision.id)
+        .where(
+            ContainerRevision.id == revision_id,
+            ContainerRevision.container_id == container_id,
+        )
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Revision '{revision_id}' not found for this container",
+        )
+    return row[0], row[1]
+
+
+@router.get("/{container_id}/revisions/diff", response_model=RevisionDiffResponse)
+async def diff_container_revisions(
+    project_id: str,
+    container_id: str,
+    current_user: CurrentUser,
+    db: DB,
+    from_revision_id: str = Query(..., alias="from_revision_id"),
+    to_revision_id: str = Query(..., alias="to_revision_id"),
+) -> RevisionDiffResponse:
+    """Compare two revisions of the same container (metadata + file diff)."""
+    project = await _get_project_or_404(project_id, current_user, db)
+    await require_permission(
+        db,
+        user=current_user,
+        organization_id=project.organization_id,
+        permission_code=P_CONTAINER_READ,
+    )
+
+    result = await db.execute(
+        select(InformationContainer).where(
+            InformationContainer.id == container_id,
+            InformationContainer.project_id == project_id,
+            InformationContainer.is_deleted.is_(False),
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Container not found"
+        )
+
+    from_revision, from_file = await _load_revision_or_404(
+        container_id, from_revision_id, db
+    )
+    to_revision, to_file = await _load_revision_or_404(container_id, to_revision_id, db)
+
+    text_diffs = [
+        _text_diff_field(
+            "revision_code", from_revision.revision_code, to_revision.revision_code
+        ),
+        _text_diff_field(
+            "version_code", from_revision.version_code, to_revision.version_code
+        ),
+        _text_diff_field(
+            "change_reason", from_revision.change_reason, to_revision.change_reason
+        ),
+        _text_diff_field(
+            "change_summary", from_revision.change_summary, to_revision.change_summary
+        ),
+    ]
+
+    original_filename_changed = (
+        from_file.original_filename if from_file else None
+    ) != (to_file.original_filename if to_file else None)
+    content_type_changed = (from_file.content_type if from_file else None) != (
+        to_file.content_type if to_file else None
+    )
+    file_size_bytes_changed = (from_file.file_size_bytes if from_file else None) != (
+        to_file.file_size_bytes if to_file else None
+    )
+    checksum_sha256_changed = (from_file.checksum_sha256 if from_file else None) != (
+        to_file.checksum_sha256 if to_file else None
+    )
+    file_diff = RevisionDiffFileComparison(
+        from_file=_file_meta(from_file),
+        to_file=_file_meta(to_file),
+        original_filename_changed=original_filename_changed,
+        content_type_changed=content_type_changed,
+        file_size_bytes_changed=file_size_bytes_changed,
+        checksum_sha256_changed=checksum_sha256_changed,
+        identical=not (
+            original_filename_changed
+            or content_type_changed
+            or file_size_bytes_changed
+            or checksum_sha256_changed
+        ),
+    )
+
+    return RevisionDiffResponse(
+        container_id=container_id,
+        from_revision=RevisionDiffSummary(
+            id=from_revision.id,
+            revision_code=from_revision.revision_code,
+            version_code=from_revision.version_code,
+            change_reason=from_revision.change_reason,
+            change_summary=from_revision.change_summary,
+            created_by=from_revision.created_by,
+            created_at=from_revision.created_at,
+            file=_file_meta(from_file),
+        ),
+        to_revision=RevisionDiffSummary(
+            id=to_revision.id,
+            revision_code=to_revision.revision_code,
+            version_code=to_revision.version_code,
+            change_reason=to_revision.change_reason,
+            change_summary=to_revision.change_summary,
+            created_by=to_revision.created_by,
+            created_at=to_revision.created_at,
+            file=_file_meta(to_file),
+        ),
+        text_diffs=text_diffs,
+        file_diff=file_diff,
+    )
+
+
 @router.post("/{container_id}/transition", response_model=ContainerResponse)
 async def transition_state(
     request: Request,
@@ -301,6 +473,7 @@ async def transition_state(
     body: StateTransitionRequest,
     current_user: CurrentUser,
     db: DB,
+    background_tasks: BackgroundTasks,
 ) -> ContainerResponse:
     project = await _get_project_or_404(project_id, current_user, db)
     # Lock the container row to serialize with the workflow reject/revert path
@@ -363,14 +536,24 @@ async def transition_state(
     if next_state in (ContainerState.published, ContainerState.archived) or (
         next_state == ContainerState.wip and body.action == "return"
     ):
+        notif_title = f"コンテナ状態が変更されました（{next_state.value}）"
+        notif_body = f"{container.identifier}: action={body.action}"
         notify_user(
             db,
             user_id=container.created_by,
             event_type="container.state_changed",
-            title=f"コンテナ状態が変更されました（{next_state.value}）",
-            body=f"{container.identifier}: action={body.action}",
+            title=notif_title,
+            body=notif_body,
             link=f"/projects/{project_id}/containers/{container.id}",
         )
+        to_email = await get_user_email(db, container.created_by)
+        if to_email:
+            background_tasks.add_task(
+                send_mail_safe,
+                to_email=to_email,
+                subject=notif_title,
+                body=notif_body,
+            )
     record_audit(
         db,
         event_type="container.state_changed",

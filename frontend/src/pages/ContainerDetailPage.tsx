@@ -16,9 +16,11 @@ import {
 import { api } from "@/lib/api";
 import {
   deleteFile,
+  getContainerRevisionDiff,
   getDownloadUrl,
   listContainerRevisions,
   listFiles,
+  type RevisionDiffResponse,
 } from "@/api/containers";
 import { shareRequestsApi } from "@/api/shareRequests";
 import {
@@ -127,6 +129,18 @@ export default function ContainerDetailPage() {
     queryFn: () => listContainerRevisions(projectId!, containerId!),
     enabled: !!projectId && !!containerId && projectId !== "demo",
   });
+  const [fromRevisionId, setFromRevisionId] = useState("");
+  const [toRevisionId, setToRevisionId] = useState("");
+  const diffMutation = useMutation({
+    mutationFn: () =>
+      getContainerRevisionDiff(
+        projectId!,
+        containerId!,
+        fromRevisionId,
+        toRevisionId,
+      ),
+  });
+  const diffResult: RevisionDiffResponse | undefined = diffMutation.data;
 
   const [shareReason, setShareReason] = useState("");
   const [shareError, setShareError] = useState<string | null>(null);
@@ -462,6 +476,186 @@ export default function ContainerDetailPage() {
                           )}
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {revisions.length >= 2 && (
+                    <div
+                      className="mt-4 rounded-lg border p-3"
+                      style={{ borderColor: "var(--border-faint)" }}
+                    >
+                      <div className="t-label mb-2">改訂版比較（Diff）</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          className="rounded-lg border px-3 py-2 text-[13px]"
+                          style={{
+                            background: "var(--surface-2)",
+                            borderColor: "var(--border)",
+                            color: "var(--text)",
+                          }}
+                          aria-label="比較元の改訂"
+                          value={fromRevisionId}
+                          onChange={(e) => setFromRevisionId(e.target.value)}
+                        >
+                          <option value="">比較元を選択</option>
+                          {revisions.map((revision) => (
+                            <option key={revision.id} value={revision.id}>
+                              {revision.version_code} (
+                              {revision.created_at
+                                ? fmtDate(revision.created_at, true)
+                                : "-"}
+                              )
+                            </option>
+                          ))}
+                        </select>
+                        <ArrowRight
+                          className="h-3.5 w-3.5 shrink-0"
+                          style={{ color: "var(--text-3)" }}
+                        />
+                        <select
+                          className="rounded-lg border px-3 py-2 text-[13px]"
+                          style={{
+                            background: "var(--surface-2)",
+                            borderColor: "var(--border)",
+                            color: "var(--text)",
+                          }}
+                          aria-label="比較先の改訂"
+                          value={toRevisionId}
+                          onChange={(e) => setToRevisionId(e.target.value)}
+                        >
+                          <option value="">比較先を選択</option>
+                          {revisions.map((revision) => (
+                            <option key={revision.id} value={revision.id}>
+                              {revision.version_code} (
+                              {revision.created_at
+                                ? fmtDate(revision.created_at, true)
+                                : "-"}
+                              )
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="app-btn app-btn-primary app-btn-sm"
+                          disabled={
+                            !fromRevisionId ||
+                            !toRevisionId ||
+                            fromRevisionId === toRevisionId ||
+                            diffMutation.isPending
+                          }
+                          onClick={() => diffMutation.mutate()}
+                        >
+                          比較
+                        </button>
+                      </div>
+
+                      {diffMutation.isError && (
+                        <div className="mt-3 rounded-lg p-3 tone-danger text-[12.5px]">
+                          差分の取得に失敗しました。
+                        </div>
+                      )}
+
+                      {diffResult && (
+                        <div className="mt-3 space-y-3">
+                          <table className="w-full border-collapse text-[12.5px]">
+                            <thead>
+                              <tr
+                                className="border-b text-left"
+                                style={{ borderColor: "var(--border-faint)" }}
+                              >
+                                <th className="py-1.5 pr-2 t-label">項目</th>
+                                <th className="py-1.5 pr-2 t-label">比較元</th>
+                                <th className="py-1.5 pr-2 t-label">比較先</th>
+                                <th className="py-1.5 t-label">差分</th>
+                              </tr>
+                            </thead>
+                            <tbody
+                              className="divide-y"
+                              style={{ borderColor: "var(--border-faint)" }}
+                            >
+                              {diffResult.text_diffs.map((field) => (
+                                <tr key={field.field}>
+                                  <td className="py-1.5 pr-2 font-semibold">
+                                    {field.field}
+                                  </td>
+                                  <td className="py-1.5 pr-2 t-sec">
+                                    {field.from_value ?? "-"}
+                                  </td>
+                                  <td className="py-1.5 pr-2 t-sec">
+                                    {field.to_value ?? "-"}
+                                  </td>
+                                  <td className="py-1.5">
+                                    <span
+                                      className={`app-badge app-badge-sq tone-${field.changed ? "warning" : "success"}`}
+                                    >
+                                      {field.changed ? "変更あり" : "変更なし"}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                              {(
+                                [
+                                  [
+                                    "ファイル名",
+                                    "original_filename_changed",
+                                    "original_filename",
+                                  ],
+                                  [
+                                    "MIMEタイプ",
+                                    "content_type_changed",
+                                    "content_type",
+                                  ],
+                                  [
+                                    "サイズ",
+                                    "file_size_bytes_changed",
+                                    "file_size_bytes",
+                                  ],
+                                  [
+                                    "SHA-256",
+                                    "checksum_sha256_changed",
+                                    "checksum_sha256",
+                                  ],
+                                ] as const
+                              ).map(([label, changedKey, valueKey]) => (
+                                <tr key={changedKey}>
+                                  <td className="py-1.5 pr-2 font-semibold">
+                                    {label}
+                                  </td>
+                                  <td className="py-1.5 pr-2 t-sec">
+                                    {String(
+                                      diffResult.file_diff.from_file?.[
+                                        valueKey
+                                      ] ?? "-",
+                                    )}
+                                  </td>
+                                  <td className="py-1.5 pr-2 t-sec">
+                                    {String(
+                                      diffResult.file_diff.to_file?.[
+                                        valueKey
+                                      ] ?? "-",
+                                    )}
+                                  </td>
+                                  <td className="py-1.5">
+                                    <span
+                                      className={`app-badge app-badge-sq tone-${diffResult.file_diff[changedKey] ? "warning" : "success"}`}
+                                    >
+                                      {diffResult.file_diff[changedKey]
+                                        ? "変更あり"
+                                        : "変更なし"}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <div
+                            className={`rounded-lg p-2 text-[12.5px] tone-${diffResult.file_diff.identical ? "success" : "warning"}`}
+                          >
+                            {diffResult.file_diff.identical
+                              ? "ファイルは完全に一致しています。"
+                              : "ファイルに差分があります。"}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

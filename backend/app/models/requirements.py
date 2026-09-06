@@ -83,5 +83,8 @@ class RequirementItem(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         Enum(ItemStatus), default=ItemStatus.not_met, nullable=False
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # ISO date string (YYYY-MM-DD), mirrors RequirementsDocument.effective_from/to
+    due_date: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    milestone_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     document: Mapped["RequirementsDocument"] = relationship(back_populates="items")
