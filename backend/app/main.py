@@ -18,6 +18,7 @@ from app.api.v1 import (
     organizations,
     projects,
     rbac,
+    reports,
     requirements,
     uploads,
     workflows,
@@ -78,6 +79,7 @@ app.include_router(uploads.router, prefix=API_PREFIX)
 app.include_router(workflows.router, prefix=API_PREFIX)
 app.include_router(organizations.router, prefix=API_PREFIX)
 app.include_router(requirements.router, prefix=API_PREFIX)
+app.include_router(reports.router, prefix=API_PREFIX)
 app.include_router(oidc.router, prefix=API_PREFIX)
 
 
