@@ -30,6 +30,8 @@ class RequirementItemCreate(BaseModel):
     responsible_user_id: str | None = None
     status: ItemStatusValues = "not_met"
     notes: str | None = None
+    due_date: str | None = None
+    milestone_name: str | None = None
 
 
 class RequirementItemUpdate(BaseModel):
@@ -42,6 +44,8 @@ class RequirementItemUpdate(BaseModel):
     responsible_user_id: str | None = None
     status: ItemStatusValues | None = None
     notes: str | None = None
+    due_date: str | None = None
+    milestone_name: str | None = None
 
 
 class RequirementItemResponse(BaseModel):
@@ -58,6 +62,8 @@ class RequirementItemResponse(BaseModel):
     responsible_user_id: str | None
     status: str
     notes: str | None
+    due_date: str | None
+    milestone_name: str | None
 
 
 class RequirementsDocumentCreate(BaseModel):
