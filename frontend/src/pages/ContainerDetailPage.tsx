@@ -9,7 +9,9 @@ import {
   FileText,
   Lock,
   RotateCcw,
+  Send,
   Trash2,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import {
@@ -20,6 +22,7 @@ import {
   listFiles,
   type RevisionDiffResponse,
 } from "@/api/containers";
+import { shareRequestsApi } from "@/api/shareRequests";
 import {
   EmptyState,
   NamingBadge,
@@ -32,6 +35,7 @@ import {
   namingSegments,
   stateOrder,
 } from "@/lib/designData";
+import { useAuthStore } from "@/hooks/useAuthStore";
 import type {
   ContainerState,
   InformationContainer,
@@ -70,9 +74,10 @@ export default function ContainerDetailPage() {
     containerId: string;
   }>();
   const [tab, setTab] = useState<
-    "overview" | "files" | "revisions" | "history"
+    "overview" | "files" | "revisions" | "history" | "share"
   >("overview");
   const queryClient = useQueryClient();
+  const currentUser = useAuthStore((s) => s.user);
   const { data, isLoading } = useQuery({
     queryKey: ["containers", projectId],
     queryFn: () =>
@@ -136,6 +141,52 @@ export default function ContainerDetailPage() {
       ),
   });
   const diffResult: RevisionDiffResponse | undefined = diffMutation.data;
+
+  const [shareReason, setShareReason] = useState("");
+  const [shareError, setShareError] = useState<string | null>(null);
+  const { data: shareRequests = [] } = useQuery({
+    queryKey: ["share-requests", projectId, containerId],
+    queryFn: () =>
+      shareRequestsApi.list(projectId!, containerId!).then((r) => r.items),
+    enabled: !!projectId && !!containerId && projectId !== "demo",
+  });
+  const invalidateShareRequests = () =>
+    queryClient.invalidateQueries({
+      queryKey: ["share-requests", projectId, containerId],
+    });
+  const createShareRequestMutation = useMutation({
+    mutationFn: () =>
+      shareRequestsApi.create(projectId!, containerId!, shareReason || null),
+    onSuccess: () => {
+      setShareReason("");
+      setShareError(null);
+      invalidateShareRequests();
+    },
+    onError: () =>
+      setShareError(
+        "外部共有申請の作成に失敗しました。権限を確認してください。",
+      ),
+  });
+  const approveShareRequestMutation = useMutation({
+    mutationFn: (id: string) =>
+      shareRequestsApi.approve(projectId!, containerId!, id),
+    onSuccess: invalidateShareRequests,
+    onError: () =>
+      setShareError("承認に失敗しました。レビュアー以上の権限が必要です。"),
+  });
+  const rejectShareRequestMutation = useMutation({
+    mutationFn: (id: string) =>
+      shareRequestsApi.reject(projectId!, containerId!, id),
+    onSuccess: invalidateShareRequests,
+    onError: () =>
+      setShareError("却下に失敗しました。レビュアー以上の権限が必要です。"),
+  });
+  const revokeShareRequestMutation = useMutation({
+    mutationFn: (id: string) =>
+      shareRequestsApi.revoke(projectId!, containerId!, id),
+    onSuccess: invalidateShareRequests,
+    onError: () => setShareError("失効に失敗しました。"),
+  });
 
   const sourceItems =
     projectId === "demo" ? demoInformationContainers : (data?.items ?? []);
@@ -258,6 +309,7 @@ export default function ContainerDetailPage() {
                 ["files", `ファイル (${files.length})`],
                 ["revisions", "改訂履歴"],
                 ["history", "状態履歴"],
+                ["share", `外部共有 (${shareRequests.length})`],
               ].map(([key, label]) => (
                 <button
                   key={key}
@@ -621,6 +673,139 @@ export default function ContainerDetailPage() {
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+              {tab === "share" && (
+                <div className="space-y-4">
+                  <div
+                    className="rounded-lg border p-3"
+                    style={{ borderColor: "var(--border)" }}
+                  >
+                    <div className="t-label mb-2">外部共有の新規申請</div>
+                    <textarea
+                      className="app-input mb-2 w-full text-[13px]"
+                      rows={2}
+                      placeholder="申請理由（任意）"
+                      value={shareReason}
+                      onChange={(e) => setShareReason(e.target.value)}
+                    />
+                    <button
+                      className="app-btn app-btn-primary app-btn-sm"
+                      disabled={createShareRequestMutation.isPending}
+                      onClick={() => createShareRequestMutation.mutate()}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      外部共有を申請
+                    </button>
+                    {shareError && (
+                      <div
+                        className="mt-2 text-[12px]"
+                        style={{ color: "var(--danger, #dc2626)" }}
+                      >
+                        {shareError}
+                      </div>
+                    )}
+                  </div>
+
+                  {shareRequests.length === 0 ? (
+                    <div className="py-8 text-center t-sec">
+                      外部共有の申請はまだありません。
+                    </div>
+                  ) : (
+                    <div
+                      className="divide-y"
+                      style={{ borderColor: "var(--border-faint)" }}
+                    >
+                      {shareRequests.map((sr) => {
+                        const isOwn =
+                          sr.requested_by_user_id === currentUser?.id;
+                        const pending = sr.status === "pending";
+                        const approved = sr.status === "approved";
+                        return (
+                          <div
+                            key={sr.id}
+                            className="flex flex-wrap items-center gap-3 py-3"
+                          >
+                            <span
+                              className={`app-badge app-badge-sq tone-${
+                                pending
+                                  ? "warning"
+                                  : approved
+                                    ? "success"
+                                    : sr.status === "rejected" ||
+                                        sr.status === "revoked"
+                                      ? "danger"
+                                      : "neutral"
+                              }`}
+                            >
+                              {sr.status}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className="truncate text-[13px] font-semibold"
+                                style={{ color: "var(--text)" }}
+                              >
+                                {sr.reason ?? "（理由なし）"}
+                                {isOwn && (
+                                  <span
+                                    className="ml-2 t-tiny"
+                                    style={{ color: "var(--text-3)" }}
+                                  >
+                                    自分の申請
+                                  </span>
+                                )}
+                              </div>
+                              <div className="t-tiny mono">
+                                {fmtDate(sr.created_at, true)}
+                                {sr.expires_at &&
+                                  ` · 期限: ${fmtDate(sr.expires_at, true)}`}
+                              </div>
+                            </div>
+                            {pending && (
+                              <>
+                                <button
+                                  className="app-btn app-btn-primary app-btn-sm"
+                                  disabled={
+                                    approveShareRequestMutation.isPending
+                                  }
+                                  onClick={() =>
+                                    approveShareRequestMutation.mutate(sr.id)
+                                  }
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  承認
+                                </button>
+                                <button
+                                  className="app-btn app-btn-ghost app-btn-sm"
+                                  disabled={
+                                    rejectShareRequestMutation.isPending
+                                  }
+                                  onClick={() =>
+                                    rejectShareRequestMutation.mutate(sr.id)
+                                  }
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                  却下
+                                </button>
+                              </>
+                            )}
+                            {(pending || approved) && (
+                              <button
+                                className="app-btn app-btn-ghost app-btn-sm"
+                                disabled={revokeShareRequestMutation.isPending}
+                                onClick={() =>
+                                  revokeShareRequestMutation.mutate(sr.id)
+                                }
+                              >
+                                <Lock className="h-3.5 w-3.5" />
+                                失効
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

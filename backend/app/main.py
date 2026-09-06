@@ -20,6 +20,7 @@ from app.api.v1 import (
     rbac,
     reports,
     requirements,
+    share_requests,
     uploads,
     workflows,
 )
@@ -81,6 +82,8 @@ app.include_router(organizations.router, prefix=API_PREFIX)
 app.include_router(requirements.router, prefix=API_PREFIX)
 app.include_router(reports.router, prefix=API_PREFIX)
 app.include_router(oidc.router, prefix=API_PREFIX)
+app.include_router(share_requests.router, prefix=API_PREFIX)
+app.include_router(share_requests.public_router, prefix=API_PREFIX)
 
 
 @app.get("/metrics", include_in_schema=False)
