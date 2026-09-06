@@ -2,7 +2,7 @@ import difflib
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 
 from app.core.deps import DB, CurrentUser
@@ -29,13 +29,14 @@ from app.schemas.container import (
     StateTransitionRequest,
 )
 from app.services.audit import enum_value, record_audit
+from app.services.mail import send_mail_safe
 from app.services.naming_validator import (
     NamingRule,
     SegmentDefinition,
     _default_iso19650_rule,
     validate_identifier,
 )
-from app.services.notifications import notify_user
+from app.services.notifications import get_user_email, notify_user
 from app.services.rbac import (
     P_CONTAINER_APPROVE,
     P_CONTAINER_ARCHIVE,
@@ -472,6 +473,7 @@ async def transition_state(
     body: StateTransitionRequest,
     current_user: CurrentUser,
     db: DB,
+    background_tasks: BackgroundTasks,
 ) -> ContainerResponse:
     project = await _get_project_or_404(project_id, current_user, db)
     # Lock the container row to serialize with the workflow reject/revert path
@@ -534,14 +536,24 @@ async def transition_state(
     if next_state in (ContainerState.published, ContainerState.archived) or (
         next_state == ContainerState.wip and body.action == "return"
     ):
+        notif_title = f"コンテナ状態が変更されました（{next_state.value}）"
+        notif_body = f"{container.identifier}: action={body.action}"
         notify_user(
             db,
             user_id=container.created_by,
             event_type="container.state_changed",
-            title=f"コンテナ状態が変更されました（{next_state.value}）",
-            body=f"{container.identifier}: action={body.action}",
+            title=notif_title,
+            body=notif_body,
             link=f"/projects/{project_id}/containers/{container.id}",
         )
+        to_email = await get_user_email(db, container.created_by)
+        if to_email:
+            background_tasks.add_task(
+                send_mail_safe,
+                to_email=to_email,
+                subject=notif_title,
+                body=notif_body,
+            )
     record_audit(
         db,
         event_type="container.state_changed",
