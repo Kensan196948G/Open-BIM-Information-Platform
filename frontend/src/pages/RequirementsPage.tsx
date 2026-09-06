@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   CheckCircle,
   Download,
   Link as LinkIcon,
@@ -14,6 +15,7 @@ import {
   type DocumentStatus,
   type DocumentType,
   type ItemStatus,
+  type RequirementItem,
   type RequirementsDocument,
   requirementsApi,
 } from "@/api/requirements";
@@ -77,6 +79,8 @@ interface ItemFormState {
   how_required: string;
   for_whom: string;
   status: ItemStatus;
+  due_date: string;
+  milestone_name: string;
 }
 
 const emptyItemForm: ItemFormState = {
@@ -86,7 +90,16 @@ const emptyItemForm: ItemFormState = {
   how_required: "",
   for_whom: "",
   status: "not_met",
+  due_date: "",
+  milestone_name: "",
 };
+
+/** Returns true when the item is past its due date and not yet fully met. */
+function isOverdue(item: RequirementItem): boolean {
+  if (!item.due_date || item.status === "met") return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return item.due_date < today;
+}
 
 function DocCreateDialog({
   projectId,
@@ -126,10 +139,16 @@ function DocCreateDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl p-6 shadow-xl" style={{ background: "var(--surface)" }}>
+      <div
+        className="w-full max-w-lg rounded-xl p-6 shadow-xl"
+        style={{ background: "var(--surface)" }}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">要求文書を作成</h2>
-          <button onClick={onClose} className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10">
+          <button
+            onClick={onClose}
+            className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -139,10 +158,14 @@ function DocCreateDialog({
             <select
               className="app-field h-10"
               value={form.doc_type}
-              onChange={(e) => setForm({ ...form, doc_type: e.target.value as DocumentType })}
+              onChange={(e) =>
+                setForm({ ...form, doc_type: e.target.value as DocumentType })
+              }
             >
               {DOC_TYPES.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </select>
           </label>
@@ -160,7 +183,9 @@ function DocCreateDialog({
             <textarea
               className="app-field min-h-[72px]"
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, description: e.target.value })
+              }
             />
           </label>
           <div className="grid grid-cols-2 gap-3">
@@ -177,20 +202,30 @@ function DocCreateDialog({
               <select
                 className="app-field h-10"
                 value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value as DocumentStatus })}
+                onChange={(e) =>
+                  setForm({ ...form, status: e.target.value as DocumentStatus })
+                }
               >
                 {statusOptions.map((s) => (
-                  <option key={s} value={s}>{statusMeta[s].label}</option>
+                  <option key={s} value={s}>
+                    {statusMeta[s].label}
+                  </option>
                 ))}
               </select>
             </label>
           </div>
-          {error && <div className="rounded-lg p-3 text-sm tone-danger">{error}</div>}
+          {error && (
+            <div className="rounded-lg p-3 text-sm tone-danger">{error}</div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="app-btn h-10">
               キャンセル
             </button>
-            <button type="submit" disabled={mutation.isPending} className="app-btn app-btn-primary h-10">
+            <button
+              type="submit"
+              disabled={mutation.isPending}
+              className="app-btn app-btn-primary h-10"
+            >
               {mutation.isPending ? "作成中..." : "作成"}
             </button>
           </div>
@@ -215,7 +250,10 @@ function ItemForm({
 }) {
   const qc = useQueryClient();
   const [form, setForm] = useState<ItemFormState>(
-    initial ?? { ...emptyItemForm, item_no: String(doc.items.length + 1).padStart(3, "0") },
+    initial ?? {
+      ...emptyItemForm,
+      item_no: String(doc.items.length + 1).padStart(3, "0"),
+    },
   );
   const [error, setError] = useState<string | null>(null);
   const editing = initial !== null;
@@ -229,7 +267,10 @@ function ItemForm({
       qc.invalidateQueries({ queryKey: ["requirements", projectId] });
       onCancel();
     },
-    onError: () => setError(editing ? "項目の更新に失敗しました" : "項目の追加に失敗しました"),
+    onError: () =>
+      setError(
+        editing ? "項目の更新に失敗しました" : "項目の追加に失敗しました",
+      ),
   });
 
   function submit(e: React.FormEvent) {
@@ -243,39 +284,99 @@ function ItemForm({
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2" style={{ borderColor: "var(--border)" }}>
+    <form
+      onSubmit={submit}
+      className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2"
+      style={{ borderColor: "var(--border)" }}
+    >
       <label className="grid gap-1 text-sm">
         <span className="font-medium">No.</span>
-        <input className="app-field h-9" value={form.item_no} onChange={(e) => setForm({ ...form, item_no: e.target.value })} />
+        <input
+          className="app-field h-9"
+          value={form.item_no}
+          onChange={(e) => setForm({ ...form, item_no: e.target.value })}
+        />
       </label>
       <label className="grid gap-1 text-sm">
         <span className="font-medium">状態</span>
-        <select className="app-field h-9" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ItemStatus })}>
+        <select
+          className="app-field h-9"
+          value={form.status}
+          onChange={(e) =>
+            setForm({ ...form, status: e.target.value as ItemStatus })
+          }
+        >
           {itemStatusOptions.map((s) => (
-            <option key={s} value={s}>{itemStatusMeta[s].label}</option>
+            <option key={s} value={s}>
+              {itemStatusMeta[s].label}
+            </option>
           ))}
         </select>
       </label>
       <label className="grid gap-1 text-sm sm:col-span-2">
         <span className="font-medium">何を（必須）</span>
-        <textarea className="app-field min-h-[56px]" value={form.what} onChange={(e) => setForm({ ...form, what: e.target.value })} />
+        <textarea
+          className="app-field min-h-[56px]"
+          value={form.what}
+          onChange={(e) => setForm({ ...form, what: e.target.value })}
+        />
       </label>
       <label className="grid gap-1 text-sm">
         <span className="font-medium">いつ</span>
-        <input className="app-field h-9" value={form.when_required} onChange={(e) => setForm({ ...form, when_required: e.target.value })} />
+        <input
+          className="app-field h-9"
+          value={form.when_required}
+          onChange={(e) => setForm({ ...form, when_required: e.target.value })}
+        />
       </label>
       <label className="grid gap-1 text-sm">
         <span className="font-medium">どのように</span>
-        <input className="app-field h-9" value={form.how_required} onChange={(e) => setForm({ ...form, how_required: e.target.value })} />
+        <input
+          className="app-field h-9"
+          value={form.how_required}
+          onChange={(e) => setForm({ ...form, how_required: e.target.value })}
+        />
       </label>
       <label className="grid gap-1 text-sm sm:col-span-2">
         <span className="font-medium">誰のために</span>
-        <input className="app-field h-9" value={form.for_whom} onChange={(e) => setForm({ ...form, for_whom: e.target.value })} />
+        <input
+          className="app-field h-9"
+          value={form.for_whom}
+          onChange={(e) => setForm({ ...form, for_whom: e.target.value })}
+        />
       </label>
-      {error && <div className="rounded-lg p-3 text-sm tone-danger sm:col-span-2">{error}</div>}
+      <label className="grid gap-1 text-sm">
+        <span className="font-medium">納期</span>
+        <input
+          type="date"
+          className="app-field h-9"
+          value={form.due_date}
+          onChange={(e) => setForm({ ...form, due_date: e.target.value })}
+        />
+      </label>
+      <label className="grid gap-1 text-sm">
+        <span className="font-medium">マイルストーン名</span>
+        <input
+          className="app-field h-9"
+          value={form.milestone_name}
+          onChange={(e) => setForm({ ...form, milestone_name: e.target.value })}
+          placeholder="例: Stage 4 - Technical Design"
+        />
+      </label>
+      {error && (
+        <div className="rounded-lg p-3 text-sm tone-danger sm:col-span-2">
+          {error}
+        </div>
+      )}
       <div className="flex justify-end gap-2 sm:col-span-2">
-        <button type="button" onClick={onCancel} className="app-btn h-9">キャンセル</button>
-        <button type="submit" disabled={mutation.isPending} className="app-btn app-btn-primary h-9">
+        <button type="button" onClick={onCancel} className="app-btn h-9">
+          キャンセル
+        </button>
+        <button
+          type="submit"
+          disabled={mutation.isPending}
+          className="app-btn app-btn-primary h-9"
+        >
           {mutation.isPending ? "保存中..." : editing ? "更新" : "追加"}
         </button>
       </div>
@@ -316,7 +417,8 @@ export default function RequirementsPage() {
     docs.find((d) => d.id === activeDocId) ?? docs[0];
 
   const deleteDoc = useMutation({
-    mutationFn: (docId: string) => requirementsApi.deleteDocument(effectiveProjectId, docId),
+    mutationFn: (docId: string) =>
+      requirementsApi.deleteDocument(effectiveProjectId, docId),
     onSuccess: () => {
       setActiveDocId("");
       qc.invalidateQueries({ queryKey: ["requirements", effectiveProjectId] });
@@ -359,7 +461,10 @@ export default function RequirementsPage() {
               </option>
             ))}
           </select>
-          <button className="app-btn app-btn-primary" onClick={() => setShowCreate(true)}>
+          <button
+            className="app-btn app-btn-primary"
+            onClick={() => setShowCreate(true)}
+          >
             <Plus className="h-4 w-4" />
             文書を作成
           </button>
@@ -410,12 +515,18 @@ export default function RequirementsPage() {
 
       {docsLoading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-6 w-6 animate-spin" style={{ color: "var(--primary)" }} />
+          <Loader2
+            className="h-6 w-6 animate-spin"
+            style={{ color: "var(--primary)" }}
+          />
         </div>
       )}
 
       {docsError && (
-        <div className="rounded-xl border p-6 text-center text-sm" style={{ borderColor: "var(--border)", color: "var(--danger-fg)" }}>
+        <div
+          className="rounded-xl border p-6 text-center text-sm"
+          style={{ borderColor: "var(--border)", color: "var(--danger-fg)" }}
+        >
           要求文書の読み込みに失敗しました。プロジェクトを選択し直してください。
         </div>
       )}
@@ -423,11 +534,17 @@ export default function RequirementsPage() {
       {!docsLoading && !docsError && (
         <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
           <div className="app-card overflow-hidden">
-            <div className="border-b px-4 py-3" style={{ borderColor: "var(--border)" }}>
+            <div
+              className="border-b px-4 py-3"
+              style={{ borderColor: "var(--border)" }}
+            >
               <span className="t-h2">文書 ({docs.length})</span>
             </div>
             {docs.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm" style={{ color: "var(--text-3)" }}>
+              <div
+                className="px-4 py-8 text-center text-sm"
+                style={{ color: "var(--text-3)" }}
+              >
                 {effectiveProjectId
                   ? "このプロジェクトに要求文書はありません"
                   : "プロジェクトを選択してください"}
@@ -442,23 +559,36 @@ export default function RequirementsPage() {
                     className="block w-full border-b p-4 text-left"
                     style={{
                       borderColor: "var(--border-faint)",
-                      borderLeft: selected ? "3px solid var(--primary)" : "3px solid transparent",
-                      background: selected ? "var(--primary-subtle)" : "transparent",
+                      borderLeft: selected
+                        ? "3px solid var(--primary)"
+                        : "3px solid transparent",
+                      background: selected
+                        ? "var(--primary-subtle)"
+                        : "transparent",
                     }}
                     onClick={() => setActiveDocId(doc.id)}
                   >
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="mono rounded-md px-2 py-0.5 text-xs font-bold" style={{ background: "var(--surface-3)" }}>
+                      <span
+                        className="mono rounded-md px-2 py-0.5 text-xs font-bold"
+                        style={{ background: "var(--surface-3)" }}
+                      >
                         {doc.doc_type}
                       </span>
-                      <span className={`app-badge app-badge-sq tone-${meta.tone}`}>
+                      <span
+                        className={`app-badge app-badge-sq tone-${meta.tone}`}
+                      >
                         {meta.label}
                       </span>
-                      <span className="mono t-tiny ml-auto">{doc.revision}</span>
+                      <span className="mono t-tiny ml-auto">
+                        {doc.revision}
+                      </span>
                     </div>
                     <div className="text-[12.5px] font-medium">{doc.title}</div>
                     <div className="mt-2 flex items-center gap-2">
-                      <span className="t-tiny mono ml-auto">{doc.item_count} 要件</span>
+                      <span className="t-tiny mono ml-auto">
+                        {doc.item_count} 要件
+                      </span>
                     </div>
                   </button>
                 );
@@ -468,7 +598,10 @@ export default function RequirementsPage() {
 
           <div className="app-card-pad">
             {!activeDoc ? (
-              <div className="flex items-center justify-center py-20 text-sm" style={{ color: "var(--text-3)" }}>
+              <div
+                className="flex items-center justify-center py-20 text-sm"
+                style={{ color: "var(--text-3)" }}
+              >
                 左側から文書を選択してください
               </div>
             ) : (
@@ -476,30 +609,51 @@ export default function RequirementsPage() {
                 <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                   <div>
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="mono rounded-md px-2 py-1 text-xs font-bold" style={{ background: "var(--surface-3)" }}>
+                      <span
+                        className="mono rounded-md px-2 py-1 text-xs font-bold"
+                        style={{ background: "var(--surface-3)" }}
+                      >
                         {activeDoc.doc_type}
                       </span>
-                      <span className="mono text-[12.5px]" style={{ color: "var(--text-2)" }}>
+                      <span
+                        className="mono text-[12.5px]"
+                        style={{ color: "var(--text-2)" }}
+                      >
                         {activeDoc.revision}
                       </span>
-                      <span className={`app-badge app-badge-sq tone-${(statusMeta[activeDoc.status] ?? statusMeta.draft).tone}`}>
-                        {(statusMeta[activeDoc.status] ?? statusMeta.draft).label}
+                      <span
+                        className={`app-badge app-badge-sq tone-${(statusMeta[activeDoc.status] ?? statusMeta.draft).tone}`}
+                      >
+                        {
+                          (statusMeta[activeDoc.status] ?? statusMeta.draft)
+                            .label
+                        }
                       </span>
                     </div>
                     <h2 className="t-h1">{activeDoc.title}</h2>
                     {activeDoc.description && (
-                      <p className="t-sec mt-1 max-w-2xl">{activeDoc.description}</p>
+                      <p className="t-sec mt-1 max-w-2xl">
+                        {activeDoc.description}
+                      </p>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button className="app-btn app-btn-sm" title="ブラウザの印刷ダイアログからPDF保存できます" onClick={() => window.print()}>
+                    <button
+                      className="app-btn app-btn-sm"
+                      title="ブラウザの印刷ダイアログからPDF保存できます"
+                      onClick={() => window.print()}
+                    >
                       <Download className="h-3.5 w-3.5" />
                       PDF
                     </button>
                     <button
                       className="app-btn app-btn-sm"
                       onClick={() => {
-                        if (window.confirm(`文書「${activeDoc.title}」を削除しますか？`)) {
+                        if (
+                          window.confirm(
+                            `文書「${activeDoc.title}」を削除しますか？`,
+                          )
+                        ) {
                           deleteDoc.mutate(activeDoc.id);
                         }
                       }}
@@ -511,11 +665,19 @@ export default function RequirementsPage() {
                 </div>
 
                 <div className="mb-5 grid gap-3 sm:grid-cols-4">
-                  <div className="rounded-xl p-3" style={{ background: "var(--surface-2)" }}>
+                  <div
+                    className="rounded-xl p-3"
+                    style={{ background: "var(--surface-2)" }}
+                  >
                     <div className="t-label mb-2">要件数</div>
-                    <div className="text-sm font-semibold">{activeDoc.item_count} 件</div>
+                    <div className="text-sm font-semibold">
+                      {activeDoc.item_count} 件
+                    </div>
                   </div>
-                  <div className="rounded-xl p-3 sm:col-span-3" style={{ background: "var(--surface-2)" }}>
+                  <div
+                    className="rounded-xl p-3 sm:col-span-3"
+                    style={{ background: "var(--surface-2)" }}
+                  >
                     <div className="t-label mb-2">関連文書</div>
                     <span className="app-badge app-badge-sq tone-info">
                       <LinkIcon className="h-3 w-3" />
@@ -526,7 +688,9 @@ export default function RequirementsPage() {
 
                 <div className="mb-3 flex items-center justify-between">
                   <div className="t-h2">要求事項明細</div>
-                  <span className="t-tiny">何を / いつ / どのように / 誰のために</span>
+                  <span className="t-tiny">
+                    何を / いつ / どのように / 誰のために / 納期
+                  </span>
                 </div>
 
                 {addingItem && (
@@ -540,9 +704,12 @@ export default function RequirementsPage() {
                   </div>
                 )}
 
-                <div className="overflow-hidden rounded-xl border" style={{ borderColor: "var(--border)" }}>
+                <div
+                  className="overflow-hidden rounded-xl border"
+                  style={{ borderColor: "var(--border)" }}
+                >
                   <div className="overflow-x-auto">
-                    <table className="app-table min-w-[860px]">
+                    <table className="app-table min-w-[980px]">
                       <thead>
                         <tr>
                           <th>No.</th>
@@ -550,6 +717,7 @@ export default function RequirementsPage() {
                           <th>いつ</th>
                           <th>どのように</th>
                           <th>誰のために</th>
+                          <th>納期 / マイルストーン</th>
                           <th>状態</th>
                           <th>操作</th>
                         </tr>
@@ -557,17 +725,24 @@ export default function RequirementsPage() {
                       <tbody>
                         {activeDoc.items.length === 0 && !addingItem ? (
                           <tr>
-                            <td colSpan={7} className="py-8 text-center text-sm" style={{ color: "var(--text-3)" }}>
+                            <td
+                              colSpan={8}
+                              className="py-8 text-center text-sm"
+                              style={{ color: "var(--text-3)" }}
+                            >
                               要求事項がありません
                             </td>
                           </tr>
                         ) : (
                           activeDoc.items.map((item) => {
-                            const im = itemStatusMeta[item.status] ?? itemStatusMeta.not_met;
+                            const im =
+                              itemStatusMeta[item.status] ??
+                              itemStatusMeta.not_met;
+                            const overdue = isOverdue(item);
                             if (editingItemNo === item.item_no) {
                               return (
                                 <tr key={item.id}>
-                                  <td colSpan={7} className="p-3">
+                                  <td colSpan={8} className="p-3">
                                     <ItemForm
                                       projectId={effectiveProjectId}
                                       doc={activeDoc}
@@ -579,6 +754,9 @@ export default function RequirementsPage() {
                                         how_required: item.how_required ?? "",
                                         for_whom: item.for_whom ?? "",
                                         status: item.status,
+                                        due_date: item.due_date ?? "",
+                                        milestone_name:
+                                          item.milestone_name ?? "",
                                       }}
                                       onCancel={() => setEditingItemNo(null)}
                                     />
@@ -588,26 +766,77 @@ export default function RequirementsPage() {
                             }
                             return (
                               <tr key={item.id}>
-                                <td><span className="mono text-xs font-semibold">{item.item_no}</span></td>
+                                <td>
+                                  <span className="mono text-xs font-semibold">
+                                    {item.item_no}
+                                  </span>
+                                </td>
                                 <td className="font-medium">{item.what}</td>
                                 <td>{item.when_required ?? "—"}</td>
                                 <td>{item.how_required ?? "—"}</td>
                                 <td>{item.for_whom ?? "—"}</td>
                                 <td>
-                                  <span className={`app-badge app-badge-sq tone-${im.tone}`}>
+                                  <div className="flex flex-col gap-1">
+                                    {item.milestone_name && (
+                                      <span className="text-xs">
+                                        {item.milestone_name}
+                                      </span>
+                                    )}
+                                    {item.due_date && (
+                                      <span
+                                        className={`mono text-[11px] ${overdue ? "font-semibold" : ""}`}
+                                        style={{
+                                          color: overdue
+                                            ? "var(--danger-fg)"
+                                            : "var(--text-3)",
+                                        }}
+                                      >
+                                        {item.due_date}
+                                      </span>
+                                    )}
+                                    {overdue && (
+                                      <span
+                                        className="app-badge app-badge-sq tone-danger w-fit"
+                                        title="納期超過"
+                                      >
+                                        <AlertTriangle className="h-3 w-3" />
+                                        遅延
+                                      </span>
+                                    )}
+                                    {!item.milestone_name && !item.due_date && (
+                                      <span style={{ color: "var(--text-3)" }}>
+                                        —
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td>
+                                  <span
+                                    className={`app-badge app-badge-sq tone-${im.tone}`}
+                                  >
                                     <CheckCircle className="h-3 w-3" />
                                     {im.label}
                                   </span>
                                 </td>
                                 <td>
                                   <div className="flex items-center gap-1">
-                                    <button className="rounded p-1.5 hover:bg-black/5 dark:hover:bg-white/10" onClick={() => setEditingItemNo(item.item_no)} title="編集">
+                                    <button
+                                      className="rounded p-1.5 hover:bg-black/5 dark:hover:bg-white/10"
+                                      onClick={() =>
+                                        setEditingItemNo(item.item_no)
+                                      }
+                                      title="編集"
+                                    >
                                       <Pencil className="h-3.5 w-3.5" />
                                     </button>
                                     <button
                                       className="rounded p-1.5 hover:bg-black/5 dark:hover:bg-white/10"
                                       onClick={() => {
-                                        if (window.confirm("この要求事項を削除しますか？")) {
+                                        if (
+                                          window.confirm(
+                                            "この要求事項を削除しますか？",
+                                          )
+                                        ) {
                                           deleteItem.mutate(item.id);
                                         }
                                       }}
@@ -627,7 +856,10 @@ export default function RequirementsPage() {
                 </div>
 
                 <div className="mt-4 flex justify-end">
-                  <button className="app-btn" onClick={() => setAddingItem(true)}>
+                  <button
+                    className="app-btn"
+                    onClick={() => setAddingItem(true)}
+                  >
                     <Plus className="h-4 w-4" />
                     要件を追加
                   </button>
@@ -639,7 +871,10 @@ export default function RequirementsPage() {
       )}
 
       {showCreate && (
-        <DocCreateDialog projectId={effectiveProjectId} onClose={() => setShowCreate(false)} />
+        <DocCreateDialog
+          projectId={effectiveProjectId}
+          onClose={() => setShowCreate(false)}
+        />
       )}
     </div>
   );

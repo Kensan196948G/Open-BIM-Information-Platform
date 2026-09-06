@@ -12,11 +12,7 @@ export type DocumentType =
   | "Supplementary";
 
 export type DocumentStatus =
-  | "draft"
-  | "under_review"
-  | "approved"
-  | "superseded"
-  | "withdrawn";
+  "draft" | "under_review" | "approved" | "superseded" | "withdrawn";
 
 export type ItemStatus = "not_met" | "partial" | "met";
 
@@ -32,6 +28,8 @@ export interface RequirementItem {
   responsible_user_id: string | null;
   status: ItemStatus;
   notes: string | null;
+  due_date: string | null;
+  milestone_name: string | null;
 }
 
 export interface RequirementsDocument {
@@ -68,6 +66,8 @@ export interface RequirementItemCreate {
   acceptance_criteria?: string | null;
   status?: ItemStatus;
   notes?: string | null;
+  due_date?: string | null;
+  milestone_name?: string | null;
 }
 
 export interface RequirementItemUpdate {
@@ -79,6 +79,8 @@ export interface RequirementItemUpdate {
   acceptance_criteria?: string | null;
   status?: ItemStatus;
   notes?: string | null;
+  due_date?: string | null;
+  milestone_name?: string | null;
 }
 
 export interface RequirementsDocumentListResponse {
@@ -101,9 +103,7 @@ export const requirementsApi = {
     docId: string,
   ): Promise<RequirementsDocument> =>
     api
-      .get<RequirementsDocument>(
-        `/projects/${projectId}/requirements/${docId}`,
-      )
+      .get<RequirementsDocument>(`/projects/${projectId}/requirements/${docId}`)
       .then((r) => r.data),
 
   createDocument: (
@@ -111,10 +111,7 @@ export const requirementsApi = {
     body: RequirementsDocumentCreate,
   ): Promise<RequirementsDocument> =>
     api
-      .post<RequirementsDocument>(
-        `/projects/${projectId}/requirements`,
-        body,
-      )
+      .post<RequirementsDocument>(`/projects/${projectId}/requirements`, body)
       .then((r) => r.data),
 
   updateDocument: (
