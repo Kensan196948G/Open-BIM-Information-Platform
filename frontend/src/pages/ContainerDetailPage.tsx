@@ -9,7 +9,9 @@ import {
   FileText,
   Lock,
   RotateCcw,
+  Send,
   Trash2,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import {
@@ -18,6 +20,7 @@ import {
   listContainerRevisions,
   listFiles,
 } from "@/api/containers";
+import { shareRequestsApi } from "@/api/shareRequests";
 import {
   EmptyState,
   NamingBadge,
@@ -25,7 +28,12 @@ import {
   StatePill,
 } from "@/components/design/Primitives";
 import { fmtDate } from "@/lib/fmt";
-import { demoInformationContainers, namingSegments, stateOrder } from "@/lib/designData";
+import {
+  demoInformationContainers,
+  namingSegments,
+  stateOrder,
+} from "@/lib/designData";
+import { useAuthStore } from "@/hooks/useAuthStore";
 import type {
   ContainerState,
   InformationContainer,
@@ -33,7 +41,15 @@ import type {
 } from "@/types";
 
 const transitions: Partial<
-  Record<ContainerState, Array<{ action: string; to: ContainerState; label: string; danger?: boolean }>>
+  Record<
+    ContainerState,
+    Array<{
+      action: string;
+      to: ContainerState;
+      label: string;
+      danger?: boolean;
+    }>
+  >
 > = {
   WIP: [{ action: "submit", to: "Shared", label: "Shared へ提出" }],
   Shared: [
@@ -43,20 +59,30 @@ const transitions: Partial<
   Published: [{ action: "archive", to: "Archived", label: "Archive へ保管" }],
 };
 
-function namingStatus(container: InformationContainer): "pass" | "warn" | "fail" {
+function namingStatus(
+  container: InformationContainer,
+): "pass" | "warn" | "fail" {
   if (container.naming_valid) return "pass";
   return container.naming_issues?.includes("不足") ? "fail" : "warn";
 }
 
 export default function ContainerDetailPage() {
-  const { projectId, containerId } = useParams<{ projectId: string; containerId: string }>();
-  const [tab, setTab] = useState<"overview" | "files" | "revisions" | "history">("overview");
+  const { projectId, containerId } = useParams<{
+    projectId: string;
+    containerId: string;
+  }>();
+  const [tab, setTab] = useState<
+    "overview" | "files" | "revisions" | "history" | "share"
+  >("overview");
   const queryClient = useQueryClient();
+  const currentUser = useAuthStore((s) => s.user);
   const { data, isLoading } = useQuery({
     queryKey: ["containers", projectId],
     queryFn: () =>
       api
-        .get<PaginatedResponse<InformationContainer>>(`/projects/${projectId}/containers`)
+        .get<PaginatedResponse<InformationContainer>>(
+          `/projects/${projectId}/containers`,
+        )
         .then((r) => r.data),
     enabled: !!projectId && projectId !== "demo",
   });
@@ -73,7 +99,8 @@ export default function ContainerDetailPage() {
         action,
         target_state: targetState,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["containers", projectId] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["containers", projectId] }),
   });
   const { data: files = [] } = useQuery({
     queryKey: ["files", projectId, containerId],
@@ -81,20 +108,70 @@ export default function ContainerDetailPage() {
     enabled: !!projectId && !!containerId && projectId !== "demo",
   });
   const deleteFileMutation = useMutation({
-    mutationFn: (fileId: string) => deleteFile(projectId!, containerId!, fileId),
+    mutationFn: (fileId: string) =>
+      deleteFile(projectId!, containerId!, fileId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["files", projectId, containerId] });
+      queryClient.invalidateQueries({
+        queryKey: ["files", projectId, containerId],
+      });
       queryClient.invalidateQueries({ queryKey: ["containers", projectId] });
     },
   });
   const downloadMutation = useMutation({
-    mutationFn: (fileId: string) => getDownloadUrl(projectId!, containerId!, fileId),
+    mutationFn: (fileId: string) =>
+      getDownloadUrl(projectId!, containerId!, fileId),
     onSuccess: (url) => window.open(url, "_blank", "noopener"),
   });
   const { data: revisions = [] } = useQuery({
     queryKey: ["revisions", projectId, containerId],
     queryFn: () => listContainerRevisions(projectId!, containerId!),
     enabled: !!projectId && !!containerId && projectId !== "demo",
+  });
+
+  const [shareReason, setShareReason] = useState("");
+  const [shareError, setShareError] = useState<string | null>(null);
+  const { data: shareRequests = [] } = useQuery({
+    queryKey: ["share-requests", projectId, containerId],
+    queryFn: () =>
+      shareRequestsApi.list(projectId!, containerId!).then((r) => r.items),
+    enabled: !!projectId && !!containerId && projectId !== "demo",
+  });
+  const invalidateShareRequests = () =>
+    queryClient.invalidateQueries({
+      queryKey: ["share-requests", projectId, containerId],
+    });
+  const createShareRequestMutation = useMutation({
+    mutationFn: () =>
+      shareRequestsApi.create(projectId!, containerId!, shareReason || null),
+    onSuccess: () => {
+      setShareReason("");
+      setShareError(null);
+      invalidateShareRequests();
+    },
+    onError: () =>
+      setShareError(
+        "外部共有申請の作成に失敗しました。権限を確認してください。",
+      ),
+  });
+  const approveShareRequestMutation = useMutation({
+    mutationFn: (id: string) =>
+      shareRequestsApi.approve(projectId!, containerId!, id),
+    onSuccess: invalidateShareRequests,
+    onError: () =>
+      setShareError("承認に失敗しました。レビュアー以上の権限が必要です。"),
+  });
+  const rejectShareRequestMutation = useMutation({
+    mutationFn: (id: string) =>
+      shareRequestsApi.reject(projectId!, containerId!, id),
+    onSuccess: invalidateShareRequests,
+    onError: () =>
+      setShareError("却下に失敗しました。レビュアー以上の権限が必要です。"),
+  });
+  const revokeShareRequestMutation = useMutation({
+    mutationFn: (id: string) =>
+      shareRequestsApi.revoke(projectId!, containerId!, id),
+    onSuccess: invalidateShareRequests,
+    onError: () => setShareError("失効に失敗しました。"),
   });
 
   const sourceItems =
@@ -109,7 +186,10 @@ export default function ContainerDetailPage() {
   if (!container) {
     return (
       <div className="mx-auto max-w-4xl p-6">
-        <EmptyState icon={<FileText className="h-6 w-6" />} title="コンテナが見つかりません" />
+        <EmptyState
+          icon={<FileText className="h-6 w-6" />}
+          title="コンテナが見つかりません"
+        />
       </div>
     );
   }
@@ -120,7 +200,10 @@ export default function ContainerDetailPage() {
 
   return (
     <div className="mx-auto max-w-[1180px] p-5 sm:p-6">
-      <Link className="app-btn app-btn-ghost app-btn-sm mb-4" to={`/projects/${projectId}/containers`}>
+      <Link
+        className="app-btn app-btn-ghost app-btn-sm mb-4"
+        to={`/projects/${projectId}/containers`}
+      >
         <ArrowLeft className="h-3.5 w-3.5" />
         情報コンテナ一覧
       </Link>
@@ -128,11 +211,16 @@ export default function ContainerDetailPage() {
       <div className="mb-5 flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "var(--surface-3)", color: "var(--text-2)" }}>
+            <span
+              className="flex h-10 w-10 items-center justify-center rounded-xl"
+              style={{ background: "var(--surface-3)", color: "var(--text-2)" }}
+            >
               <FileText className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <div className="mono truncate text-base font-semibold">{container.identifier}</div>
+              <div className="mono truncate text-base font-semibold">
+                {container.identifier}
+              </div>
               <div className="t-sec truncate">{container.title}</div>
             </div>
           </div>
@@ -148,18 +236,47 @@ export default function ContainerDetailPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               {segments.map((segment, index) => (
-                <div key={`${segment}-${index}`} className="overflow-hidden rounded-lg border" style={{ borderColor: status === "pass" ? "var(--border)" : "var(--warning)" }}>
-                  <div className="mono px-3 py-1.5 text-center text-sm font-semibold" style={{ background: status === "pass" ? "var(--surface-2)" : "var(--warning-bg)", color: status === "pass" ? "var(--text)" : "var(--warning-fg)" }}>
+                <div
+                  key={`${segment}-${index}`}
+                  className="overflow-hidden rounded-lg border"
+                  style={{
+                    borderColor:
+                      status === "pass" ? "var(--border)" : "var(--warning)",
+                  }}
+                >
+                  <div
+                    className="mono px-3 py-1.5 text-center text-sm font-semibold"
+                    style={{
+                      background:
+                        status === "pass"
+                          ? "var(--surface-2)"
+                          : "var(--warning-bg)",
+                      color:
+                        status === "pass" ? "var(--text)" : "var(--warning-fg)",
+                    }}
+                  >
                     {segment}
                   </div>
-                  <div className="border-t px-3 py-1 text-center text-[9.5px]" style={{ borderColor: "var(--border-faint)", color: "var(--text-3)" }}>
+                  <div
+                    className="border-t px-3 py-1 text-center text-[9.5px]"
+                    style={{
+                      borderColor: "var(--border-faint)",
+                      color: "var(--text-3)",
+                    }}
+                  >
                     {namingSegments[index]?.label ?? "-"}
                   </div>
                 </div>
               ))}
             </div>
-            <div className={`mt-4 flex gap-2 rounded-lg p-3 tone-${status === "pass" ? "success" : status === "warn" ? "warning" : "danger"}`}>
-              {status === "pass" ? <Check className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+            <div
+              className={`mt-4 flex gap-2 rounded-lg p-3 tone-${status === "pass" ? "success" : status === "warn" ? "warning" : "danger"}`}
+            >
+              {status === "pass" ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
               <div className="text-[12.5px]">
                 {container.naming_valid
                   ? "ISO 19650-2 命名規則に適合しています。"
@@ -169,21 +286,30 @@ export default function ContainerDetailPage() {
           </div>
 
           <div className="app-card overflow-hidden">
-            <div className="flex border-b px-2" style={{ borderColor: "var(--border)" }}>
+            <div
+              className="flex border-b px-2"
+              style={{ borderColor: "var(--border)" }}
+            >
               {[
                 ["overview", "概要・メタデータ"],
                 ["files", `ファイル (${files.length})`],
                 ["revisions", "改訂履歴"],
                 ["history", "状態履歴"],
+                ["share", `外部共有 (${shareRequests.length})`],
               ].map(([key, label]) => (
                 <button
                   key={key}
                   className="relative px-3 py-3 text-[13px]"
                   onClick={() => setTab(key as typeof tab)}
-                  style={{ color: tab === key ? "var(--text)" : "var(--text-2)", fontWeight: tab === key ? 600 : 450 }}
+                  style={{
+                    color: tab === key ? "var(--text)" : "var(--text-2)",
+                    fontWeight: tab === key ? 600 : 450,
+                  }}
                 >
                   {label}
-                  {tab === key && <span className="absolute inset-x-2 bottom-[-1px] h-0.5 rounded bg-[var(--primary)]" />}
+                  {tab === key && (
+                    <span className="absolute inset-x-2 bottom-[-1px] h-0.5 rounded bg-[var(--primary)]" />
+                  )}
                 </button>
               ))}
             </div>
@@ -199,7 +325,9 @@ export default function ContainerDetailPage() {
                   ].map(([key, value]) => (
                     <div key={key}>
                       <div className="t-label mb-1">{key}</div>
-                      <div className="mono text-[13px] font-medium">{value}</div>
+                      <div className="mono text-[13px] font-medium">
+                        {value}
+                      </div>
                     </div>
                   ))}
                   <div>
@@ -215,19 +343,35 @@ export default function ContainerDetailPage() {
                       ファイルがありません。WIP 状態でアップロードできます。
                     </div>
                   ) : (
-                    <div className="divide-y" style={{ borderColor: "var(--border-faint)" }}>
+                    <div
+                      className="divide-y"
+                      style={{ borderColor: "var(--border-faint)" }}
+                    >
                       {files.map((file) => (
-                        <div key={file.id} className="flex items-center gap-3 py-3">
-                          <FileText className="h-5 w-5 shrink-0" style={{ color: "var(--text-3)" }} />
+                        <div
+                          key={file.id}
+                          className="flex items-center gap-3 py-3"
+                        >
+                          <FileText
+                            className="h-5 w-5 shrink-0"
+                            style={{ color: "var(--text-3)" }}
+                          />
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px] font-semibold" style={{ color: "var(--text)" }}>
+                            <div
+                              className="truncate text-[13px] font-semibold"
+                              style={{ color: "var(--text)" }}
+                            >
                               {file.original_filename}
                             </div>
                             <div className="t-tiny mono">
-                              {(file.file_size_bytes / 1024).toFixed(1)} KB · {fmtDate(file.created_at, true)}
+                              {(file.file_size_bytes / 1024).toFixed(1)} KB ·{" "}
+                              {fmtDate(file.created_at, true)}
                             </div>
                           </div>
-                          <span className="mono hidden truncate text-[10px] sm:inline" style={{ color: "var(--text-3)" }}>
+                          <span
+                            className="mono hidden truncate text-[10px] sm:inline"
+                            style={{ color: "var(--text-3)" }}
+                          >
                             {file.checksum_sha256.slice(0, 12)}…
                           </span>
                           <button
@@ -243,13 +387,20 @@ export default function ContainerDetailPage() {
                               className="app-btn app-btn-ghost app-btn-sm"
                               disabled={deleteFileMutation.isPending}
                               onClick={() => {
-                                if (window.confirm(`「${file.original_filename}」を削除しますか？`)) {
+                                if (
+                                  window.confirm(
+                                    `「${file.original_filename}」を削除しますか？`,
+                                  )
+                                ) {
                                   deleteFileMutation.mutate(file.id);
                                 }
                               }}
                               aria-label={`${file.original_filename} を削除`}
                             >
-                              <Trash2 className="h-3.5 w-3.5" style={{ color: "var(--danger, #dc2626)" }} />
+                              <Trash2
+                                className="h-3.5 w-3.5"
+                                style={{ color: "var(--danger, #dc2626)" }}
+                              />
                             </button>
                           )}
                         </div>
@@ -265,28 +416,49 @@ export default function ContainerDetailPage() {
                       改訂履歴はありません。ファイルをアップロードすると記録されます。
                     </div>
                   ) : (
-                    <div className="divide-y" style={{ borderColor: "var(--border-faint)" }}>
+                    <div
+                      className="divide-y"
+                      style={{ borderColor: "var(--border-faint)" }}
+                    >
                       {revisions.map((revision, index) => (
-                        <div key={revision.id} className="flex items-center gap-3 py-3">
-                          <span className="mono w-20 shrink-0 rounded-lg px-2 py-1 text-center text-xs font-semibold"
+                        <div
+                          key={revision.id}
+                          className="flex items-center gap-3 py-3"
+                        >
+                          <span
+                            className="mono w-20 shrink-0 rounded-lg px-2 py-1 text-center text-xs font-semibold"
                             style={{
-                              background: index === 0 ? "var(--primary-subtle)" : "var(--surface-2)",
-                              color: index === 0 ? "var(--primary-text)" : "var(--text-2)",
+                              background:
+                                index === 0
+                                  ? "var(--primary-subtle)"
+                                  : "var(--surface-2)",
+                              color:
+                                index === 0
+                                  ? "var(--primary-text)"
+                                  : "var(--text-2)",
                             }}
                           >
                             {revision.version_code}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px] font-semibold" style={{ color: "var(--text)" }}>
-                              {revision.file?.original_filename ?? "（ファイルなし）"}
+                            <div
+                              className="truncate text-[13px] font-semibold"
+                              style={{ color: "var(--text)" }}
+                            >
+                              {revision.file?.original_filename ??
+                                "（ファイルなし）"}
                             </div>
                             <div className="t-tiny">
                               {revision.change_reason ?? "変更理由なし"} ·{" "}
-                              {revision.created_at ? fmtDate(revision.created_at, true) : "-"}
+                              {revision.created_at
+                                ? fmtDate(revision.created_at, true)
+                                : "-"}
                             </div>
                           </div>
                           {index === 0 && (
-                            <span className="app-badge app-badge-sq tone-success">現行版</span>
+                            <span className="app-badge app-badge-sq tone-success">
+                              現行版
+                            </span>
                           )}
                         </div>
                       ))}
@@ -299,10 +471,147 @@ export default function ContainerDetailPage() {
                   <div className="flex gap-3">
                     <span className="mt-1 h-3 w-3 rounded-full bg-[var(--primary)]" />
                     <div>
-                      <div className="text-sm font-semibold">現在の状態: {container.current_state}</div>
-                      <div className="t-tiny">すべての状態遷移は監査ログに記録されます。</div>
+                      <div className="text-sm font-semibold">
+                        現在の状態: {container.current_state}
+                      </div>
+                      <div className="t-tiny">
+                        すべての状態遷移は監査ログに記録されます。
+                      </div>
                     </div>
                   </div>
+                </div>
+              )}
+              {tab === "share" && (
+                <div className="space-y-4">
+                  <div
+                    className="rounded-lg border p-3"
+                    style={{ borderColor: "var(--border)" }}
+                  >
+                    <div className="t-label mb-2">外部共有の新規申請</div>
+                    <textarea
+                      className="app-input mb-2 w-full text-[13px]"
+                      rows={2}
+                      placeholder="申請理由（任意）"
+                      value={shareReason}
+                      onChange={(e) => setShareReason(e.target.value)}
+                    />
+                    <button
+                      className="app-btn app-btn-primary app-btn-sm"
+                      disabled={createShareRequestMutation.isPending}
+                      onClick={() => createShareRequestMutation.mutate()}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      外部共有を申請
+                    </button>
+                    {shareError && (
+                      <div
+                        className="mt-2 text-[12px]"
+                        style={{ color: "var(--danger, #dc2626)" }}
+                      >
+                        {shareError}
+                      </div>
+                    )}
+                  </div>
+
+                  {shareRequests.length === 0 ? (
+                    <div className="py-8 text-center t-sec">
+                      外部共有の申請はまだありません。
+                    </div>
+                  ) : (
+                    <div
+                      className="divide-y"
+                      style={{ borderColor: "var(--border-faint)" }}
+                    >
+                      {shareRequests.map((sr) => {
+                        const isOwn =
+                          sr.requested_by_user_id === currentUser?.id;
+                        const pending = sr.status === "pending";
+                        const approved = sr.status === "approved";
+                        return (
+                          <div
+                            key={sr.id}
+                            className="flex flex-wrap items-center gap-3 py-3"
+                          >
+                            <span
+                              className={`app-badge app-badge-sq tone-${
+                                pending
+                                  ? "warning"
+                                  : approved
+                                    ? "success"
+                                    : sr.status === "rejected" ||
+                                        sr.status === "revoked"
+                                      ? "danger"
+                                      : "neutral"
+                              }`}
+                            >
+                              {sr.status}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className="truncate text-[13px] font-semibold"
+                                style={{ color: "var(--text)" }}
+                              >
+                                {sr.reason ?? "（理由なし）"}
+                                {isOwn && (
+                                  <span
+                                    className="ml-2 t-tiny"
+                                    style={{ color: "var(--text-3)" }}
+                                  >
+                                    自分の申請
+                                  </span>
+                                )}
+                              </div>
+                              <div className="t-tiny mono">
+                                {fmtDate(sr.created_at, true)}
+                                {sr.expires_at &&
+                                  ` · 期限: ${fmtDate(sr.expires_at, true)}`}
+                              </div>
+                            </div>
+                            {pending && (
+                              <>
+                                <button
+                                  className="app-btn app-btn-primary app-btn-sm"
+                                  disabled={
+                                    approveShareRequestMutation.isPending
+                                  }
+                                  onClick={() =>
+                                    approveShareRequestMutation.mutate(sr.id)
+                                  }
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  承認
+                                </button>
+                                <button
+                                  className="app-btn app-btn-ghost app-btn-sm"
+                                  disabled={
+                                    rejectShareRequestMutation.isPending
+                                  }
+                                  onClick={() =>
+                                    rejectShareRequestMutation.mutate(sr.id)
+                                  }
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                  却下
+                                </button>
+                              </>
+                            )}
+                            {(pending || approved) && (
+                              <button
+                                className="app-btn app-btn-ghost app-btn-sm"
+                                disabled={revokeShareRequestMutation.isPending}
+                                onClick={() =>
+                                  revokeShareRequestMutation.mutate(sr.id)
+                                }
+                              >
+                                <Lock className="h-3.5 w-3.5" />
+                                失効
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -316,7 +625,8 @@ export default function ContainerDetailPage() {
             <div className="mt-5 flex items-center">
               {stateOrder.map((state, index) => {
                 const active = state === container.current_state;
-                const passed = stateOrder.indexOf(container.current_state) > index;
+                const passed =
+                  stateOrder.indexOf(container.current_state) > index;
                 return (
                   <div key={state} className="contents">
                     <div className="flex flex-1 flex-col items-center">
@@ -330,9 +640,18 @@ export default function ContainerDetailPage() {
                               : "var(--surface-3)",
                         }}
                       />
-                      <span className="mt-1 text-[9px]" style={{ color: active ? "var(--text)" : "var(--text-3)" }}>{state}</span>
+                      <span
+                        className="mt-1 text-[9px]"
+                        style={{
+                          color: active ? "var(--text)" : "var(--text-3)",
+                        }}
+                      >
+                        {state}
+                      </span>
                     </div>
-                    {index < stateOrder.length - 1 && <span className="mb-4 h-px w-4 bg-[var(--border-strong)]" />}
+                    {index < stateOrder.length - 1 && (
+                      <span className="mb-4 h-px w-4 bg-[var(--border-strong)]" />
+                    )}
                   </div>
                 );
               })}
@@ -342,7 +661,10 @@ export default function ContainerDetailPage() {
           <div className="app-card-pad">
             <div className="t-label mb-3">実行可能なアクション</div>
             {available.length === 0 ? (
-              <div className="flex gap-2 rounded-lg p-3" style={{ background: "var(--surface-2)" }}>
+              <div
+                className="flex gap-2 rounded-lg p-3"
+                style={{ background: "var(--surface-2)" }}
+              >
                 <Lock className="h-4 w-4" style={{ color: "var(--text-3)" }} />
                 <div className="t-sec">この状態では遷移できません。</div>
               </div>
@@ -353,9 +675,18 @@ export default function ContainerDetailPage() {
                     key={action.action}
                     className={`app-btn ${action.danger ? "" : "app-btn-primary"}`}
                     disabled={transitionMutation.isPending}
-                    onClick={() => transitionMutation.mutate({ action: action.action, targetState: action.to })}
+                    onClick={() =>
+                      transitionMutation.mutate({
+                        action: action.action,
+                        targetState: action.to,
+                      })
+                    }
                   >
-                    {action.danger ? <RotateCcw className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}
+                    {action.danger ? (
+                      <RotateCcw className="h-4 w-4" />
+                    ) : (
+                      <ArrowRight className="h-4 w-4" />
+                    )}
                     {action.label}
                   </button>
                 ))}
@@ -368,13 +699,26 @@ export default function ContainerDetailPage() {
             {[
               ["閲覧", true],
               ["ダウンロード", container.security_level !== "restricted"],
-              ["外部共有", container.security_level === "public" || container.security_level === "limited"],
+              [
+                "外部共有",
+                container.security_level === "public" ||
+                  container.security_level === "limited",
+              ],
               ["保管", container.current_state === "Published"],
             ].map(([label, ok]) => (
-              <div key={String(label)} className="mb-2 flex items-center justify-between">
+              <div
+                key={String(label)}
+                className="mb-2 flex items-center justify-between"
+              >
                 <span className="t-sec">{label}</span>
-                <span className={`app-badge app-badge-sq tone-${ok ? "success" : "danger"}`}>
-                  {ok ? <Check className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                <span
+                  className={`app-badge app-badge-sq tone-${ok ? "success" : "danger"}`}
+                >
+                  {ok ? (
+                    <Check className="h-3 w-3" />
+                  ) : (
+                    <Lock className="h-3 w-3" />
+                  )}
                   {ok ? "許可" : "不可"}
                 </span>
               </div>

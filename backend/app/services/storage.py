@@ -88,3 +88,9 @@ def generate_presigned_url(
 
 def delete_file(storage_key: str) -> None:
     get_s3_client().delete_object(Bucket=settings.MINIO_BUCKET, Key=storage_key)
+
+
+def download_file(storage_key: str) -> bytes:
+    """Fetch object bytes for server-side streaming (e.g. public share links)."""
+    obj = get_s3_client().get_object(Bucket=settings.MINIO_BUCKET, Key=storage_key)
+    return obj["Body"].read()
