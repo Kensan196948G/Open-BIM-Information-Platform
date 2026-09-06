@@ -82,6 +82,16 @@ class Settings(BaseSettings):
     # Empty (default) = any IdP user may be provisioned; production should set it.
     OIDC_ALLOWED_DOMAINS: str = ""
 
+    # SMTP (outbound email notifications). Disabled by default — CI and local
+    # dev never require a reachable SMTP server (see app.services.mail).
+    SMTP_ENABLED: bool = False
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "no-reply@example.com"
+    SMTP_USE_TLS: bool = True
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",")]
